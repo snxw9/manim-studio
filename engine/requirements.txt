@@ -1,0 +1,12 @@
+manim
+ffmpeg-python
+fastapi
+uvicorn
+websockets
+Pillow
+pytest
+black
+ruff
+langchain
+google-generativeai
+openai
