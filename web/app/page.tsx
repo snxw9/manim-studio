@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useStore, Scene } from '@/lib/store';
 import { DndContext, DragEndEvent } from '@dnd-kit/core';
-import { Loader2, Play, Wand2, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, Play, Wand2, RefreshCw, AlertCircle, CheckCircle2, Zap } from 'lucide-react';
 import MonacoEditor from '@/components/MonacoEditor';
 import VoicePrompt from '@/components/VoicePrompt';
 import TemplateLibrary from '@/components/TemplateLibrary';
@@ -13,6 +13,8 @@ import AssetLibrary from '@/components/AssetLibrary';
 import ProjectManager from '@/components/ProjectManager';
 import DragDropBuilder from '@/components/DragDropBuilder';
 import ExportPanel from '@/components/ExportPanel';
+import BrowserNotice from '@/components/BrowserNotice';
+
 export default function Home() {
   const {
     prompt,
@@ -37,15 +39,43 @@ export default function Home() {
     previewError,
     previewErrors,
     setPreviewErrors,
-    setScenes
+    setScenes,
+    engineStatus,
+    setEngineStatus,
+    lastProvider,
+    setLastProvider,
+    lastModel,
+    setLastModel
   } = useStore();
 
-  // Auto-cleanup previews on code change (debounced via effect)
+  const filename = useMemo(() => {
+    const match = generatedCode.match(/class\s+(\w+)\s*\(/);
+    const sceneName = match ? match[1] : "Animation";
+    return `${sceneName}_${videoQuality}.${videoFormat}`;
+  }, [generatedCode, videoQuality, videoFormat]);
+
+  // Engine health check on mount
+  useEffect(() => {
+    const checkEngine = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/health');
+        if (res.ok) setEngineStatus('online');
+        else setEngineStatus('offline');
+      } catch (err) {
+        setEngineStatus('offline');
+      }
+    };
+    checkEngine();
+    const interval = setInterval(checkEngine, 10000); // Check every 10s
+    return () => clearInterval(interval);
+  }, [setEngineStatus]);
+
+  // Auto-cleanup previews on code change
   useEffect(() => {
     if (!generatedCode) return;
     const match = generatedCode.match(/class\s+(\w+)\s*\(/);
     const sceneName = match ? match[1] : null;
-    
+
     if (sceneName) {
       fetch('/api/cleanup', {
         method: 'POST',
@@ -80,10 +110,12 @@ export default function Home() {
 
       setGeneratedCode(data.code);
       setSuggestions(data.suggestions || []);
-      
+      setLastProvider(data.provider);
+      setLastModel(data.model);
+
       // Basic mock scene parsing for timeline
       setScenes([{ id: 'scene-1', name: 'Main Animation', duration: 3, order: 0 }]);
-      
+
       setActiveTab('code');
       setRenderStatus('idle');
       // Success state for banner
@@ -108,7 +140,7 @@ export default function Home() {
           format: videoFormat
         })
       });
-      
+
       if (!res.ok) {
         if (res.status === 422) {
           const data = await res.json();
@@ -135,8 +167,18 @@ export default function Home() {
     <DndContext onDragEnd={handleDragEnd}>
       <div className="flex h-screen bg-[#0f0f0f] text-zinc-300 font-sans">
         
+        {/* Engine Offline Banner */}
+        {engineStatus === 'offline' && (
+          <div className="fixed top-0 left-0 right-0 z-[100] bg-red-900 text-red-100 text-[10px] uppercase tracking-widest text-center py-1.5 px-4 font-bold shadow-xl border-b border-red-700/50 backdrop-blur-md">
+            <span className="opacity-80 mr-2">⚠️ Python engine is offline — Start it with:</span>
+            <code className="bg-black/30 px-2 py-0.5 rounded border border-white/10 lowercase font-mono tracking-normal">
+              cd engine && uvicorn main:app --reload --port 8000
+            </code>
+          </div>
+        )}
+
         {/* Left Sidebar */}
-        <div className="w-64 bg-[#1a1a1a] border-r border-zinc-800 flex flex-col h-full shrink-0">
+        <div className={`w-64 bg-[#1a1a1a] border-r border-zinc-800 flex flex-col h-full shrink-0 transition-all duration-300 ${engineStatus === 'offline' ? 'pt-8' : ''}`}>
           <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
             <h1 className="font-bold text-white tracking-tight flex items-center gap-2">
               <Wand2 size={18} className="text-purple-500" />
@@ -153,7 +195,7 @@ export default function Home() {
         </div>
 
         {/* Main Canvas */}
-        <div className="flex-1 flex flex-col min-w-0 h-full relative bg-[#0a0a0a]">
+        <div className={`flex-1 flex flex-col min-w-0 h-full relative bg-[#0a0a0a] transition-all duration-300 ${engineStatus === 'offline' ? 'pt-8' : ''}`}>
           {/* Tabs */}
           <div className="flex items-center gap-1 p-2 bg-[#1a1a1a] border-b border-zinc-800">
             <button 
@@ -168,6 +210,16 @@ export default function Home() {
             >
               Code
             </button>
+            
+            {activeTab === 'code' && lastProvider && (
+              <div className="ml-4 flex items-center gap-2 px-2 py-1 rounded-full bg-zinc-900 border border-zinc-800">
+                <Zap size={10} className="text-purple-400 fill-purple-400" />
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-tighter">
+                  {lastProvider} <span className="opacity-30 mx-1">/</span> {lastModel}
+                </span>
+              </div>
+            )}
+
             <div className="flex-1" />
             <button
               onClick={activeTab === 'code' ? handleRender : handleGenerate}
@@ -216,7 +268,7 @@ export default function Home() {
                   </div>
                 )}
                 {previewStatus === 'idle' && generatedCode && previewErrors.length === 0 && (
-                   <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-green-500/90 text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 shadow-lg border border-green-400 animate-in fade-in slide-in-from-top-4 duration-500">
+                   <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-green-500/90 text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 shadow-lg border border-green-400">
                     <CheckCircle2 size={14} />
                     ✅ Code was auto-corrected or is valid
                   </div>
@@ -236,7 +288,7 @@ export default function Home() {
                     Rendering preview...
                   </div>
                 ) : null}
-                
+
                 {previewError ? (
                   <div className="p-3 text-xs text-red-400 font-mono overflow-auto flex items-start gap-2 h-full bg-red-950/20">
                     <AlertCircle size={14} className="shrink-0 mt-0.5" />
@@ -249,6 +301,7 @@ export default function Home() {
                     muted 
                     loop 
                     playsInline
+                    controls
                     className="w-full h-full object-contain" 
                   />
                 ) : (
@@ -258,7 +311,7 @@ export default function Home() {
                 )}
               </div>
               <div className="flex-1 flex flex-col gap-4 overflow-hidden">
-                <ExportPanel />
+                <ExportPanel videoBlob={videoBlob} filename={filename} />
                 <div className="flex-1 flex flex-col min-h-0">
                   <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Final Output</h3>
                   {renderStatus === 'done' && videoUrl ? (
@@ -285,11 +338,12 @@ export default function Home() {
         </div>
 
         {/* Right Sidebar - Timeline */}
-        <div className="w-72 bg-[#1a1a1a] border-l border-zinc-800 h-full shrink-0">
+        <div className={`w-72 bg-[#1a1a1a] border-l border-zinc-800 h-full shrink-0 transition-all duration-300 ${engineStatus === 'offline' ? 'pt-8' : ''}`}>
           <TimelineEditor />
         </div>
 
       </div>
+      <BrowserNotice />
     </DndContext>
   );
 }

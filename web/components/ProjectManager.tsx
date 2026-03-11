@@ -32,6 +32,7 @@ export default function ProjectManager() {
   };
 
   const handleSave = async () => {
+    if (typeof window === 'undefined') return;
     const name = window.prompt("Enter project name:", "New Project") || "Untitled";
     const now = Date.now();
     

@@ -57,17 +57,20 @@ export default function MonacoEditor() {
           body: JSON.stringify({ code: debouncedCode })
         });
         
-        if (!response.ok) {
+        const data = await response.json();
+
+        if (!response.ok || data.error) {
           if (response.status === 422) {
-            const data = await response.json();
             setPreviewErrors(data.details || []);
             throw new Error(data.error || 'Validation failed');
           }
-          const data = await response.json();
-          throw new Error(data.error || 'Preview failed');
+          let msg = data.error || 'Preview failed';
+          if (data.fix) msg += `\n\nFix: ${data.fix}`;
+          throw new Error(msg);
         }
         
-        const blob = await response.blob();
+        // Render from base64
+        const blob = await fetch(`data:video/mp4;base64,${data.video}`).then(r => r.blob());
         const url = URL.createObjectURL(blob);
         
         if (currentUrlRef.current) {

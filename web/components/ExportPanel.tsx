@@ -1,121 +1,105 @@
 'use client';
+import { useRef, useState, useEffect } from 'react';
+import { detectBrowser, saveVideoFile, pickSaveLocation, BrowserInfo, SaveStrategy } from '@/lib/fileSaver';
 
-import { useState, useRef, useEffect } from 'react';
-import { useStore, VideoFormat, VideoQuality } from '@/lib/store';
-import { Folder, Download, CheckCircle, AlertCircle } from 'lucide-react';
-import { saveAs } from 'file-saver';
+interface ExportPanelProps {
+  videoBlob: Blob | null;
+  filename: string;
+}
 
-export default function ExportPanel() {
-  const { videoFormat, setVideoFormat, videoQuality, setVideoQuality, videoBlob, generatedCode } = useStore();
-  const [saveDirPath, setSaveDirPath] = useState<string>('');
+export default function ExportPanel({ videoBlob, filename }: ExportPanelProps) {
   const dirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
+  const [saveDirName, setSaveDirName] = useState<string>('');
+  const [browserInfo, setBrowserInfo] = useState<BrowserInfo | null>(null);
+  const [status, setStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [currentStrategy, setCurrentStrategy] = useState<SaveStrategy>('download');
 
   useEffect(() => {
-    const lastDir = localStorage.getItem('last_save_dir');
-    if (lastDir) {
-      setSaveDirPath(lastDir);
-    }
+    setBrowserInfo(detectBrowser());
+    const lastName = localStorage.getItem('last_save_dir');
+    if (lastName) setSaveDirName(lastName);
   }, []);
 
-  const pickSaveDirectory = async () => {
+  const handlePickDirectory = async () => {
+    setStatus(null);
     try {
-      const handle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
-      dirHandleRef.current = handle;
-      setSaveDirPath(handle.name);
-      localStorage.setItem('last_save_dir', handle.name);
-    } catch (err) {
-      console.error("Directory picker error:", err);
-    }
-  };
-
-  const handleSaveVideo = async () => {
-    if (!videoBlob) return;
-
-    // Extract scene name
-    const match = generatedCode.match(/class\s+(\w+)\s*\(/);
-    const sceneName = match ? match[1] : "Animation";
-    const filename = `${sceneName}_{videoQuality}.${videoFormat}`;
-
-    if (dirHandleRef.current) {
-      try {
-        const fileHandle = await dirHandleRef.current.getFileHandle(filename, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(videoBlob);
-        await writable.close();
-        alert(`Saved ${filename} to ${dirHandleRef.current.name}`);
-      } catch (err) {
-        console.error("File System Access API error, falling back:", err);
-        saveAs(videoBlob, filename);
+      const result = await pickSaveLocation();
+      setCurrentStrategy(result.strategy);
+      
+      if (result.dirName) {
+        setSaveDirName(result.dirName);
+        localStorage.setItem('last_save_dir', result.dirName);
+        
+        if (result.dirHandle) {
+          dirHandleRef.current = result.dirHandle;
+          setStatus({ type: 'info', message: `Direct saving enabled to: ${result.dirName}/` });
+        } else {
+          dirHandleRef.current = null;
+          setStatus({ type: 'info', message: `Folder selected: ${result.dirName}/ (Manual move required)` });
+        }
       }
-    } else {
-      saveAs(videoBlob, filename);
+    } catch (err: any) {
+      setStatus({ type: 'error', message: `Folder picker failed: ${err.message}` });
     }
   };
+
+  const handleSave = async () => {
+    if (!videoBlob) {
+      setStatus({ type: 'error', message: 'No video yet — render first.' });
+      return;
+    }
+    setStatus({ type: 'info', message: 'Saving...' });
+    const result = await saveVideoFile(videoBlob, filename, dirHandleRef.current);
+    setStatus({ type: result.success ? 'success' : 'error', message: result.message });
+  };
+
+  if (!browserInfo) return null;
 
   return (
-    <div className="flex flex-col gap-4 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
-      <div className="flex flex-col gap-2">
-        <label className="text-xs font-semibold text-zinc-500 uppercase">Quality & Format</label>
-        <div className="flex gap-2">
-          <select 
-            value={videoQuality}
-            onChange={(e) => setVideoQuality(e.target.value as VideoQuality)}
-            className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm outline-none focus:border-purple-500"
-          >
-            <option value="480p">480p (Fast)</option>
-            <option value="720p">720p (Medium)</option>
-            <option value="1080p">1080p (High)</option>
-            <option value="2160p">4K (Ultra)</option>
-          </select>
-          <select 
-            value={videoFormat}
-            onChange={(e) => setVideoFormat(e.target.value as VideoFormat)}
-            className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm outline-none focus:border-purple-500"
-          >
-            <option value="mp4">MP4</option>
-            <option value="gif">GIF</option>
-            <option value="webm">WebM</option>
-            <option value="mov">MOV</option>
-          </select>
-        </div>
-        {videoFormat === 'gif' && (
-          <p className="text-[10px] text-zinc-500 italic">GIF files are larger. Best for short loops.</p>
-        )}
+    <div className="flex flex-col gap-3 p-4 bg-[#1a1a1a] rounded-xl border border-white/10">
+      <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider">Export Video</h3>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handlePickDirectory}
+          className="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors flex items-center gap-2"
+        >
+          📁 Choose Folder
+        </button>
+        <span className="text-xs text-white/50 truncate max-w-[180px]">
+          {saveDirName ? `→ ${saveDirName}/` : 'No folder selected'}
+        </span>
       </div>
 
-      <div className="flex flex-col gap-2 pt-2 border-t border-zinc-800">
-        <div className="flex items-center justify-between">
-           <label className="text-xs font-semibold text-zinc-500 uppercase">Export</label>
-           {saveDirPath && (
-             <span className="text-[10px] text-zinc-500 flex items-center gap-1">
-               <CheckCircle size={10} className="text-green-500" />
-               Saving to: {saveDirPath}
-             </span>
-           )}
-        </div>
-        
-        <div className="flex gap-2">
-          <button 
-            onClick={pickSaveDirectory}
-            className="flex-1 flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 py-2 rounded text-sm transition-colors"
-            title="Choose a local folder for automatic saving"
-          >
-            <Folder size={16} />
-            Folder
-          </button>
-          <button 
-            onClick={handleSaveVideo}
-            disabled={!videoBlob}
-            className="flex-[2] flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-2 rounded text-sm font-medium transition-colors shadow-lg"
-          >
-            <Download size={16} />
-            Save Video
-          </button>
-        </div>
-        {!dirHandleRef.current && saveDirPath && (
-          <p className="text-[10px] text-zinc-600 text-center">Re-pick folder to enable direct saving.</p>
-        )}
-      </div>
+      {!dirHandleRef.current && saveDirName && (
+        <p className="text-[10px] text-orange-400/80 italic">
+          Note: Direct writing not supported. File will download — please move it to {saveDirName}/ manually.
+        </p>
+      )}
+
+      {browserInfo.name === 'Firefox' && !saveDirName && (
+        <p className="text-[10px] text-white/40 italic">
+          Firefox downloads to your default folder. Pick a folder to show its name here.
+        </p>
+      )}
+
+      <button
+        onClick={handleSave}
+        disabled={!videoBlob}
+        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-white/10 disabled:text-white/30 text-white text-sm rounded-lg transition-all font-medium shadow-lg"
+      >
+        {dirHandleRef.current ? `💾 Save to ${saveDirName}/` : '⬇️ Download Video'}
+      </button>
+
+      {status && (
+        <p className={`text-xs rounded px-2 py-1 flex items-center gap-2 ${
+          status.type === 'success' ? 'bg-green-900/40 text-green-400' :
+          status.type === 'error'   ? 'bg-red-900/40 text-red-400' :
+                                      'bg-white/5 text-white/50'
+        }`}>
+          {status.type === 'success' ? '✅' : status.type === 'error' ? '❌' : 'ℹ️'} {status.message}
+        </p>
+      )}
     </div>
   );
 }

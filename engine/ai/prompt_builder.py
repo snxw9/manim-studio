@@ -33,6 +33,21 @@ For finding intersection of two lines, use this exact pattern:
       [line2.get_start(), line2.get_end()]
   )
 
+LATEX ESCAPING RULES — critical, always follow these:
+- NEVER write LaTeX in a regular string like: "180^\\circ" or "\\alpha"
+- ALWAYS use raw strings for any string containing backslashes: r"180^\\circ", r"\\alpha + \\beta"
+- OR double-escape every backslash: "180^\\\\circ", "\\\\alpha + \\\\beta"
+- This applies inside Tex(), MathTex(), Text(), and any string assignment
+- Example WRONG:  MathTex("\\\\alpha + \\\\beta = 180^\\circ")
+- Example RIGHT:  MathTex(r"\\alpha + \\beta = 180^\\circ")
+
+GEOMETRY CONSTRUCTOR RULES:
+- Sector(radius=0.7, angle=PI/3)          ← CORRECT, use radius= not outer_radius=
+- AnnularSector(inner_radius=0.3, outer_radius=0.7, angle=PI/3)  ← CORRECT for rings
+- NEVER use Sector(outer_radius=...)      ← outer_radius does not exist on Sector
+- NEVER use Sector(inner_radius=...)      ← inner_radius does not exist on Sector
+- Arc(radius=1, angle=PI/2)              ← CORRECT
+
 Always prefer simple, well-known Manim methods. If unsure whether a method exists, use a simpler approach.
 
 After writing the code, mentally check every method call. If you are not 100% certain a method exists 
