@@ -1,8 +1,15 @@
 'use client';
-
+import { useState, useEffect } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 
-const assets = [
+interface Asset {
+  id: string;
+  type: string;
+  label: string;
+  code: string;
+}
+
+const assets: Asset[] = [
   { id: 'math_pi', type: 'symbol', label: 'π', code: 'MathTex(r"\\pi")' },
   { id: 'math_sigma', type: 'symbol', label: 'Σ', code: 'MathTex(r"\\sum")' },
   { id: 'shape_circle', type: 'shape', label: '◯', code: 'Circle()' },
@@ -11,15 +18,29 @@ const assets = [
   { id: 'grid_axes', type: 'grid', label: '▦', code: 'Axes()' },
 ];
 
-function DraggableAsset({ asset }: { asset: any }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+function DraggableAsset({ asset }: { asset: Asset }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: asset.id,
     data: asset,
   });
 
   const style = transform ? {
     transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    zIndex: isDragging ? 999 : undefined,
+    opacity: isDragging ? 0.8 : 1,
   } : undefined;
+
+  // Render a non-interactive placeholder during SSR/before mount
+  if (!mounted) {
+    return (
+      <div className="flex flex-col items-center justify-center p-3 bg-zinc-900 border border-zinc-800 rounded-lg cursor-grab shadow-inner opacity-50">
+        <span className="text-2xl text-zinc-300">{asset.label}</span>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -27,9 +48,9 @@ function DraggableAsset({ asset }: { asset: any }) {
       style={style}
       {...listeners}
       {...attributes}
-      className="flex flex-col items-center justify-center p-3 bg-zinc-900 border border-zinc-800 rounded-lg cursor-grab hover:border-zinc-600 transition-colors"
+      className="flex flex-col items-center justify-center p-3 bg-zinc-900 border border-zinc-800 rounded-lg cursor-grab hover:border-purple-500 hover:bg-zinc-800 transition shadow-lg active:scale-95 group"
     >
-      <span className="text-2xl text-zinc-300">{asset.label}</span>
+      <span className="text-2xl text-zinc-300 group-hover:text-purple-400 transition-colors">{asset.label}</span>
     </div>
   );
 }

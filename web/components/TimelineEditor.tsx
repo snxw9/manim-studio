@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Clock } from 'lucide-react';
+import ClientOnly from '@/components/ClientOnly';
 
 function SortableItem({ id, scene }: { id: string, scene: any }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
@@ -73,15 +74,17 @@ export default function TimelineEditor() {
   return (
     <div className="p-4 h-full flex flex-col">
       <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">Timeline</h3>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={scenes.map(s => s.id)} strategy={verticalListSortingStrategy}>
-          <div className="flex-1 overflow-y-auto pr-2">
-            {scenes.map((scene) => (
-              <SortableItem key={scene.id} id={scene.id} scene={scene} />
-            ))}
-          </div>
-        </SortableContext>
-      </DndContext>
+      <ClientOnly>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={scenes.map(s => s.id)} strategy={verticalListSortingStrategy}>
+            <div className="flex-1 overflow-y-auto pr-2">
+              {scenes.map((scene) => (
+                <SortableItem key={scene.id} id={scene.id} scene={scene} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      </ClientOnly>
     </div>
   );
 }

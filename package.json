@@ -1,0 +1,14 @@
+{
+  "name": "manim-studio",
+  "private": true,
+  "scripts": {
+    "start": "concurrently --names \"ENGINE,WEB\" --prefix-colors \"yellow,cyan\" \"npm run engine\" \"npm run web\"",
+    "engine": "cd engine && uvicorn main:app --reload --port 8000",
+    "web": "cd web && npm run dev",
+    "install:all": "cd web && npm install",
+    "test": "cd engine && pytest tests/ -v && cd ../web && npm test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

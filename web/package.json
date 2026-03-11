@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
+    "dev:full": "concurrently --names \"ENGINE,WEB\" --prefix-colors \"yellow,cyan\" \"../start-engine.bat\" \"next dev --turbopack\"",
+    "engine": "cd ../engine && uvicorn main:app --reload --port 8000",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "test": "vitest"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -34,6 +35,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
