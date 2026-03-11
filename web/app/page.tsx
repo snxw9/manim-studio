@@ -114,7 +114,9 @@ export default function Home() {
     lastProvider,
     setLastProvider,
     lastModel,
-    setLastModel
+    setLastModel,
+    errorMessage,
+    setErrorMessage
   } = useStore();
 
   const filename = useMemo(() => {
@@ -149,34 +151,54 @@ export default function Home() {
   };
 
   const handleGenerate = async () => {
-    if (!prompt) return;
     setRenderStatus('generating');
-    setPreviewStatus('auto-correcting');
+    setGeneratedCode('');
+    
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, template: selectedTemplate })
+        body: JSON.stringify({ prompt, template: selectedTemplate }),
       });
+  
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-
+  
+      if (!res.ok) {
+        // Parse the error message cleanly
+        let errorMsg = data.detail || data.error || 'Generation failed';
+        
+        // Strip the JSON wrapper if present
+        if (errorMsg.startsWith('500:')) {
+          errorMsg = errorMsg.replace('500: ', '');
+        }
+        
+        // Check for quota error specifically
+        if (errorMsg.toLowerCase().includes('quota') || errorMsg.includes('429')) {
+          setRenderStatus('error');
+          setErrorMessage(
+            '⚠️ API quota exhausted. To fix this:\n\n' +
+            '• Gemini: Add billing at aistudio.google.com (free tier has daily limits)\n' +
+            '• OpenAI: Add credits at platform.openai.com/settings/billing\n' +
+            '• Or wait — free tier resets daily\n\n' +
+            'Tip: Gemini has a generous free paid tier at very low cost.'
+          );
+          return;
+        }
+  
+        setRenderStatus('error');
+        setErrorMessage(errorMsg);
+        return;
+      }
+  
       setGeneratedCode(data.code);
       setSuggestions(data.suggestions || []);
       setLastProvider(data.provider);
       setLastModel(data.model);
-
-      // Basic mock scene parsing for timeline
-      setScenes([{ id: 'scene-1', name: 'Main Animation', duration: 3, order: 0 }]);
-
-      setActiveTab('code');
       setRenderStatus('idle');
-      // Success state for banner
-      setTimeout(() => setPreviewStatus('idle'), 3000);
-    } catch (error) {
-      console.error(error);
+  
+    } catch (err: any) {
       setRenderStatus('error');
-      setPreviewStatus('error');
+      setErrorMessage(`Network error: ${err.message}. Is the engine running?`);
     }
   };
 
@@ -303,6 +325,17 @@ export default function Home() {
                         placeholder="Describe the math animation you want to build..."
                         className="w-full h-32 bg-zinc-900 border border-zinc-800 rounded-lg p-4 text-white placeholder:text-zinc-600 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 resize-none shadow-inner"
                       />
+                      {renderStatus === 'error' && errorMessage && (
+                        <div className="mt-3 p-4 bg-red-950 border border-red-800 rounded-xl text-red-300 text-sm whitespace-pre-line">
+                          {errorMessage}
+                          <button 
+                            onClick={() => { setRenderStatus('idle'); setErrorMessage(''); }}
+                            className="block mt-3 text-xs text-red-500 hover:text-red-300 underline"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      )}
                       <div className="absolute bottom-3 right-3 flex gap-2">
                         <VoicePrompt />
                       </div>
