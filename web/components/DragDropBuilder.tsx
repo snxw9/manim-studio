@@ -4,7 +4,6 @@ import { useDroppable } from '@dnd-kit/core';
 import { useStore } from '@/lib/store';
 
 export default function DragDropBuilder() {
-  const { prompt, setPrompt } = useStore();
   const { isOver, setNodeRef } = useDroppable({
     id: 'canvas-droppable',
   });

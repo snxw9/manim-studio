@@ -9,7 +9,7 @@ export async function POST(req: Request) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
-      signal: AbortSignal.timeout(90000), // 90 second timeout
+      signal: AbortSignal.timeout(90000),
     });
     
     if (!engineRes.ok) {
@@ -34,11 +34,12 @@ export async function POST(req: Request) {
     const base64 = videoBuffer.toString('base64');
     return NextResponse.json({ video: base64, mimeType: 'video/mp4' });
     
-  } catch (err: any) {
-    console.error('[preview route] Fetch failed:', err.message);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[preview route] Fetch failed:', message);
     return NextResponse.json({ 
       error: 'Could not reach Python engine',
-      detail: err.message,
+      detail: message,
       fix: 'Make sure the engine is running: cd engine && uvicorn main:app --reload --port 8000'
     }, { status: 503 });
   }

@@ -1,0 +1,8 @@
+node_modules/
+.next/
+engine/outputs/
+engine/__pycache__/
+engine/.pytest_cache/
+android/.gradle/
+android/app/build/
+.git/

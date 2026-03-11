@@ -6,7 +6,10 @@ export default function ClientOnly({ children, fallback = null }: {
   fallback?: ReactNode;
 }) {
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   if (!mounted) return <>{fallback}</>;
   return <>{children}</>;
 }

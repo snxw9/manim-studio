@@ -7,7 +7,10 @@ export default function BrowserNotice() {
   useEffect(() => {
     const dismissed = localStorage.getItem('browser-notice-dismissed');
     const isChromium = typeof window !== 'undefined' && 'showDirectoryPicker' in window;
-    if (!isChromium && !dismissed) setShow(true);
+    if (!isChromium && !dismissed) {
+      const frame = requestAnimationFrame(() => setShow(true));
+      return () => cancelAnimationFrame(frame);
+    }
   }, []);
 
   if (!show) return null;

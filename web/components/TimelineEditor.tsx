@@ -1,6 +1,6 @@
 'use client';
 
-import { useStore } from '@/lib/store';
+import { useStore, Scene } from '@/lib/store';
 import {
   DndContext,
   closestCenter,
@@ -8,6 +8,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  DragEndEvent,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -20,7 +21,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Clock } from 'lucide-react';
 import ClientOnly from '@/components/ClientOnly';
 
-function SortableItem({ id, scene }: { id: string, scene: any }) {
+function SortableItem({ id, scene }: { id: string, scene: Scene }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
 
   const style = {
@@ -52,10 +53,10 @@ export default function TimelineEditor() {
     })
   );
 
-  const handleDragEnd = (event: any) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (active.id !== over.id) {
+    if (over && active.id !== over.id) {
       const oldIndex = scenes.findIndex((s) => s.id === active.id);
       const newIndex = scenes.findIndex((s) => s.id === over.id);
       

@@ -5,7 +5,7 @@ import { useStore } from '@/lib/store';
 import { Mic, MicOff } from 'lucide-react';
 
 export default function VoicePrompt() {
-  const { prompt, setPrompt } = useStore();
+  const { setPrompt } = useStore();
   const [isListening, setIsListening] = useState(false);
   const [recognition, setRecognition] = useState<any>(null);
 
@@ -21,7 +21,7 @@ export default function VoicePrompt() {
         for (let i = 0; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
-        setPrompt(prompt + ' ' + transcript);
+        setPrompt((prev: string) => prev + (prev ? ' ' : '') + transcript);
       };
 
       rec.onerror = (event: any) => {
@@ -33,9 +33,10 @@ export default function VoicePrompt() {
         setIsListening(false);
       };
 
-      setRecognition(rec);
+      const frame = requestAnimationFrame(() => setRecognition(rec));
+      return () => cancelAnimationFrame(frame);
     }
-  }, []);
+  }, [setPrompt]);
 
   const toggleListen = () => {
     if (isListening) {

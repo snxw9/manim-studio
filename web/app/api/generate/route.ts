@@ -20,13 +20,16 @@ export async function POST(req: Request) {
     const data = await response.json();
     return NextResponse.json({
       code: data.code,
-      suggestions: [
+      suggestions: data.suggestions || [
         'Add a zooming camera effect',
         'Change the colors to be vibrant',
         'Add math formulas describing the shapes'
-      ]
+      ],
+      provider: data.provider,
+      model: data.model
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

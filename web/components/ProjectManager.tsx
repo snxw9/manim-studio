@@ -20,16 +20,17 @@ export default function ProjectManager() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [savedProjects, setSavedProjects] = useState<Project[]>([]);
 
-  useEffect(() => {
-    if (isModalOpen) {
-      loadSavedProjects();
-    }
-  }, [isModalOpen]);
-
   const loadSavedProjects = async () => {
     const projects = await db.projects.orderBy('updatedAt').reverse().toArray();
     setSavedProjects(projects);
   };
+
+  useEffect(() => {
+    if (isModalOpen) {
+      const frame = requestAnimationFrame(() => loadSavedProjects());
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [isModalOpen]);
 
   const handleSave = async () => {
     if (typeof window === 'undefined') return;

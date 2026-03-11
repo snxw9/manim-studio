@@ -30,8 +30,9 @@ export async function POST(req: Request) {
         'Content-Disposition': response.headers.get('Content-Disposition') || ''
       }
     });
-  } catch (error: any) {
-    console.error("API /render error:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("API /render error:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

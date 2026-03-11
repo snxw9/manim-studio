@@ -77,8 +77,19 @@ def run_manim(code: str, preview: bool = False, quality: str = "1080p", fmt: str
         if found_files:
             # Move it to the root of output_dir
             shutil.move(found_files[0], final_output_path)
-            # Cleanup the "videos" junk directory manim creates
-            # (Optional: might be safer to leave it or only delete empty dirs)
+            
+            # Safely cleanup the empty nested directories manim creates
+            # e.g., outputs/videos/tmp_filename/1080p60/
+            try:
+                parent_dir = os.path.dirname(found_files[0])
+                while parent_dir.startswith(output_dir) and parent_dir != output_dir:
+                    if not os.listdir(parent_dir):
+                        os.rmdir(parent_dir)
+                        parent_dir = os.path.dirname(parent_dir)
+                    else:
+                        break
+            except Exception as cleanup_err:
+                print(f"Non-critical cleanup error: {cleanup_err}")
         else:
             # Fallback check if it's already where we expect or check stdout
             if not os.path.exists(final_output_path):

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useStore, Scene } from '@/lib/store';
+import { useStore } from '@/lib/store';
 import { DndContext, DragEndEvent } from '@dnd-kit/core';
 import { Loader2, Play, Wand2, RefreshCw, AlertCircle, CheckCircle2, Zap } from 'lucide-react';
 import MonacoEditor from '@/components/MonacoEditor';
@@ -141,8 +141,8 @@ export default function Home() {
   const handleDragEnd = (event: DragEndEvent) => {
     const { over, active } = event;
     if (over && over.id === 'canvas-droppable') {
-      const assetData = active.data.current as any;
-      if (assetData) {
+      const assetData = active.data.current;
+      if (assetData && typeof assetData === 'object' && 'label' in assetData && 'type' in assetData) {
         setPrompt(prompt + (prompt ? ' ' : '') + `Include a ${assetData.type}: ${assetData.label}.`);
       }
     }

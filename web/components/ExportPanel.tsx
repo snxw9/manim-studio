@@ -1,6 +1,6 @@
 'use client';
-import { useRef, useState, useEffect } from 'react';
-import { detectBrowser, saveVideoFile, pickSaveLocation, BrowserInfo, SaveStrategy } from '@/lib/fileSaver';
+import { useState, useEffect } from 'react';
+import { detectBrowser, saveVideoFile, pickSaveLocation, BrowserInfo } from '@/lib/fileSaver';
 
 interface ExportPanelProps {
   videoBlob: Blob | null;
@@ -8,33 +8,34 @@ interface ExportPanelProps {
 }
 
 export default function ExportPanel({ videoBlob, filename }: ExportPanelProps) {
-  const dirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
+  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [saveDirName, setSaveDirName] = useState<string>('');
   const [browserInfo, setBrowserInfo] = useState<BrowserInfo | null>(null);
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
-  const [currentStrategy, setCurrentStrategy] = useState<SaveStrategy>('download');
 
   useEffect(() => {
-    setBrowserInfo(detectBrowser());
+    const frame = requestAnimationFrame(() => {
+      setBrowserInfo(detectBrowser());
+    });
     const lastName = localStorage.getItem('last_save_dir');
     if (lastName) setSaveDirName(lastName);
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   const handlePickDirectory = async () => {
     setStatus(null);
     try {
       const result = await pickSaveLocation();
-      setCurrentStrategy(result.strategy);
       
       if (result.dirName) {
         setSaveDirName(result.dirName);
         localStorage.setItem('last_save_dir', result.dirName);
         
         if (result.dirHandle) {
-          dirHandleRef.current = result.dirHandle;
+          setDirHandle(result.dirHandle);
           setStatus({ type: 'info', message: `Direct saving enabled to: ${result.dirName}/` });
         } else {
-          dirHandleRef.current = null;
+          setDirHandle(null);
           setStatus({ type: 'info', message: `Folder selected: ${result.dirName}/ (Manual move required)` });
         }
       }
@@ -49,7 +50,7 @@ export default function ExportPanel({ videoBlob, filename }: ExportPanelProps) {
       return;
     }
     setStatus({ type: 'info', message: 'Saving...' });
-    const result = await saveVideoFile(videoBlob, filename, dirHandleRef.current);
+    const result = await saveVideoFile(videoBlob, filename, dirHandle);
     setStatus({ type: result.success ? 'success' : 'error', message: result.message });
   };
 
@@ -71,7 +72,7 @@ export default function ExportPanel({ videoBlob, filename }: ExportPanelProps) {
         </span>
       </div>
 
-      {!dirHandleRef.current && saveDirName && (
+      {!dirHandle && saveDirName && (
         <p className="text-[10px] text-orange-400/80 italic">
           Note: Direct writing not supported. File will download — please move it to {saveDirName}/ manually.
         </p>
@@ -88,7 +89,7 @@ export default function ExportPanel({ videoBlob, filename }: ExportPanelProps) {
         disabled={!videoBlob}
         className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-white/10 disabled:text-white/30 text-white text-sm rounded-lg transition-all font-medium shadow-lg"
       >
-        {dirHandleRef.current ? `💾 Save to ${saveDirName}/` : '⬇️ Download Video'}
+        {dirHandle ? `💾 Save to ${saveDirName}/` : '⬇️ Download Video'}
       </button>
 
       {status && (
