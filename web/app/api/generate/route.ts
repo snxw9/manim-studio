@@ -4,17 +4,24 @@ const ENGINE_URL = 'http://127.0.0.1:8000';
 
 export async function POST(req: Request) {
   try {
-    const { prompt, template } = await req.json();
+    const { prompt, template, user_keys } = await req.json();
 
     const response = await fetch(`${ENGINE_URL}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, template: template || 'none' }),
+      body: JSON.stringify({ 
+        prompt, 
+        template: template || 'none',
+        user_keys: user_keys || {}
+      }),
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      return NextResponse.json({ error: errorText }, { status: response.status });
+      const errorData = await response.json().catch(() => ({}));
+      return NextResponse.json(
+        { error: errorData.detail || 'Generation failed' }, 
+        { status: response.status }
+      );
     }
 
     const data = await response.json();
@@ -26,7 +33,9 @@ export async function POST(req: Request) {
         'Add math formulas describing the shapes'
       ],
       provider: data.provider,
-      model: data.model
+      model: data.model,
+      remaining_today: data.remaining_today,
+      using_own_key: data.using_own_key
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

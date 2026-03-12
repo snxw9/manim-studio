@@ -20,12 +20,21 @@ object ApiKeyManager {
     fun getGroqKey(context: Context): String =
         getPrefs(context).getString("groq_api_key", "") ?: ""
 
-    fun hasGroqKey(context: Context): Boolean =
-        getGroqKey(context).isNotBlank()
-    
     fun setGeminiKey(context: Context, key: String) =
         getPrefs(context).edit().putString("gemini_api_key", key).apply()
 
     fun getGeminiKey(context: Context): String =
         getPrefs(context).getString("gemini_api_key", "") ?: ""
+
+    fun setOpenAIKey(context: Context, key: String) =
+        getPrefs(context).edit().putString("openai_api_key", key).apply()
+
+    fun getOpenAIKey(context: Context): String =
+        getPrefs(context).getString("openai_api_key", "") ?: ""
+
+    fun hasAnyKey(context: Context): Boolean {
+        return getGroqKey(context).isNotBlank() || 
+               getGeminiKey(context).isNotBlank() || 
+               getOpenAIKey(context).isNotBlank()
+    }
 }

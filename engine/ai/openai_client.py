@@ -2,9 +2,13 @@ from openai import AsyncOpenAI
 import asyncio
 import os
 
-client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
-
-async def generate(prompt: str, model: str = "gpt-4o-mini") -> str:
+async def generate(prompt: str, model: str = "gpt-4o-mini", api_key: str = None) -> str:
+    key = api_key or os.environ.get("OPENAI_API_KEY", "")
+    if not key:
+        raise ValueError("No OpenAI API key available")
+        
+    client = AsyncOpenAI(api_key=key)
+    
     last_error = None
     for attempt in range(3):
         try:
@@ -34,7 +38,7 @@ async def generate(prompt: str, model: str = "gpt-4o-mini") -> str:
             err_str = str(e)
             if "429" in err_str or "quota" in err_str.lower():
                 if attempt < 2:
-                    wait = (attempt + 1) * 10
+                    wait = (attempt + 1) * 10  # 10s, 20s
                     print(f"[openai] Rate limited, waiting {wait}s before retry {attempt+1}/2...")
                     await asyncio.sleep(wait)
                     continue

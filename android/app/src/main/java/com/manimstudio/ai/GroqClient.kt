@@ -13,6 +13,8 @@ import java.util.concurrent.TimeUnit
 
 object GroqClient {
 
+    private const val ENGINE_URL = "http://10.0.2.2:8000" // Default for Android Emulator to host PC
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -27,14 +29,23 @@ object GroqClient {
         - No explanation, no markdown fences
     """.trimIndent()
 
-    suspend fun generate(
-        context: Context,
-        prompt: String,
+    suspend fun generate(context: Context, prompt: String): String {
+        val userKey = ApiKeyManager.getGroqKey(context)
+        
+        return if (userKey.isNotBlank()) {
+            // User has their own key — call Groq directly (fastest, no middleman)
+            generateDirect(prompt, userKey)
+        } else {
+            // No user key — call the hosted engine (uses server's free quota)
+            generateViaEngine(context, prompt)
+        }
+    }
+
+    private suspend fun generateDirect(
+        prompt: String, 
+        apiKey: String,
         model: String = "llama-3.3-70b-versatile"
     ): String = withContext(Dispatchers.IO) {
-        val apiKey = ApiKeyManager.getGroqKey(context)
-        if (apiKey.isBlank()) throw IllegalStateException("No Groq API key set")
-
         val body = JSONObject().apply {
             put("model", model)
             put("temperature", 0.2)
@@ -75,17 +86,56 @@ object GroqClient {
             .getString("content")
             .trim()
 
-        // Strip markdown fences
-        if (code.startsWith("```python")) code = code.removePrefix("```python")
-        if (code.startsWith("```")) code = code.removePrefix("```")
-        if (code.endsWith("```")) code = code.removeSuffix("```")
+        cleanCode(code)
+    }
 
-        code.trim()
+    private suspend fun generateViaEngine(context: Context, prompt: String): String = withContext(Dispatchers.IO) {
+        // Forward other keys if they exist
+        val userKeys = JSONObject().apply {
+            val gemini = ApiKeyManager.getGeminiKey(context)
+            if (gemini.isNotBlank()) put("gemini", gemini)
+            val openai = ApiKeyManager.getOpenAIKey(context)
+            if (openai.isNotBlank()) put("openai", openai)
+        }
+
+        val body = JSONObject().apply {
+            put("prompt", prompt)
+            put("user_keys", userKeys)
+        }
+
+        val request = Request.Builder()
+            .url("$ENGINE_URL/generate")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        val response = client.newCall(request).execute()
+        val responseBody = response.body?.string() 
+            ?: throw Exception("Empty response from engine")
+
+        if (!response.isSuccessful) {
+            val error = JSONObject(responseBody)
+            val detail = error.opt("detail")
+            val msg = if (detail is JSONObject) detail.optString("message") else detail?.toString() ?: responseBody
+            throw Exception(msg)
+        }
+
+        val data = JSONObject(responseBody)
+        data.getString("code")
+    }
+
+    private fun cleanCode(code: String): String {
+        var cleaned = code.trim()
+        if (cleaned.startsWith("```python")) cleaned = cleaned.removePrefix("```python")
+        if (cleaned.startsWith("```")) cleaned = cleaned.removePrefix("```")
+        if (cleaned.endsWith("```")) cleaned = cleaned.removeSuffix("```")
+        return cleaned.trim()
     }
 
     suspend fun testKey(context: Context): Boolean = withContext(Dispatchers.IO) {
         try {
-            generate(context, "Write: from manim import *", "llama-3.1-8b-instant")
+            val key = ApiKeyManager.getGroqKey(context)
+            if (key.isBlank()) return@withContext false
+            generateDirect("Say OK", key, "llama-3.1-8b-instant")
             true
         } catch (e: Exception) {
             false

@@ -64,7 +64,33 @@ def is_quota_error(error_str: str) -> bool:
 def is_auth_error(error_str: str) -> bool:
     return any(s in error_str.lower() for s in ["401", "403", "api key", "authentication", "invalid_api_key"])
 
-async def generate_with_fallback(prompt: str, tier: ModelTier = "standard") -> dict:
+def get_api_key(provider: str, request_key: str | None = None) -> str | None:
+    """
+    Priority order:
+    1. Key passed directly in the API request (user brings their own key)
+    2. Key from engine .env file (developer's key — personal/hosted use)
+    3. None — will skip this provider
+    """
+    if request_key:
+        return request_key
+    
+    env_map = {
+        "groq":   "GROQ_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+        "openai": "OPENAI_API_KEY",
+    }
+    
+    env_key = env_map.get(provider)
+    if env_key:
+        return os.getenv(env_key)
+    
+    return None
+
+async def generate_with_fallback(
+    prompt: str, 
+    tier: ModelTier = "standard",
+    user_keys: dict | None = None,  # {"groq": "key...", "gemini": "key..."}
+) -> dict:
     """Try each model in the fallback chain sequentially. Stop at first success."""
     from ai.gemini_client import generate as gemini_generate
     from ai.openai_client import generate as openai_generate
@@ -73,6 +99,8 @@ async def generate_with_fallback(prompt: str, tier: ModelTier = "standard") -> d
     except ImportError:
         groq_generate = None
     from renderer.code_validator import validate_manim_code
+
+    user_keys = user_keys or {}
 
     # Check disk cache first
     key = _cache_key(prompt)
@@ -88,23 +116,21 @@ async def generate_with_fallback(prompt: str, tier: ModelTier = "standard") -> d
         provider = entry["provider"]
         model = entry["model"]
 
-        # Skip providers with missing API keys
-        if provider == "groq" and not os.getenv("GROQ_API_KEY"):
-            continue
-        if provider == "gemini" and not os.getenv("GEMINI_API_KEY"):
-            continue
-        if provider == "openai" and not os.getenv("OPENAI_API_KEY"):
-            continue
+        # Resolve key — user key takes priority over env key
+        api_key = get_api_key(provider, user_keys.get(provider))
+        
+        if not api_key and provider != "ollama":
+            continue  # No key available for this provider — skip it
 
         try:
             print(f"[model_router] Trying {provider}/{model}...")
 
             if provider == "groq" and groq_generate:
-                code = await groq_generate(prompt, model=model)
+                code = await groq_generate(prompt, model=model, api_key=api_key)
             elif provider == "gemini":
-                code = await gemini_generate(prompt, model=model)
+                code = await gemini_generate(prompt, model=model, api_key=api_key)
             elif provider == "openai":
-                code = await openai_generate(prompt, model=model)
+                code = await openai_generate(prompt, model=model, api_key=api_key)
             else:
                 continue
 
@@ -148,7 +174,7 @@ async def generate_with_fallback(prompt: str, tier: ModelTier = "standard") -> d
 
 def _build_user_error(last_error: dict | None) -> str:
     if not last_error:
-        return "All AI providers failed. Check your API keys in engine/.env"
+        return "All AI providers failed. Check your API keys in engine/.env or Settings."
     
     err = last_error.get("error", "")
     
@@ -157,13 +183,13 @@ def _build_user_error(last_error: dict | None) -> str:
             "API quota exhausted on all providers. Options:\n"
             "1. Wait for quota reset\n"
             "2. Add billing to your Groq/Gemini/OpenAI account\n"
-            "3. Check your API keys in engine/.env"
+            "3. Add your own API key in Settings for unlimited use."
         )
     if is_auth_error(err):
-        return "Invalid API key. Check engine/.env"
+        return "Invalid API key. Check engine/.env or your own keys in Settings."
     
     return f"Generation failed: {err[:200]}"
 
 # Keep old name as alias so existing imports don't break
-async def race_models(prompt: str, tier: ModelTier = "standard") -> dict:
-    return await generate_with_fallback(prompt, tier)
+async def race_models(prompt: str, tier: ModelTier = "standard", user_keys: dict | None = None) -> dict:
+    return await generate_with_fallback(prompt, tier, user_keys)

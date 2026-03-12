@@ -8,7 +8,17 @@
 - **Web App (Next.js 15):** A local browser-based UI running a fully functional Monaco editor, prompt inputs, and video previews.
 - **Android App (Kotlin/Compose):** A local mobile app embedding the Python engine natively via Chaquopy.
 
-## 🚀 Getting Started
+## 👥 For Users
+
+### Using Manim Studio
+- **Free (no setup needed):** Just open the app — you get 10 free animations per day automatically.
+- **Unlimited (free API key):**
+  1. Get a free Groq key at [console.groq.com](https://console.groq.com/keys) (30 seconds, no credit card).
+  2. **Web:** Open Settings → API Keys → paste your Groq key.
+  3. **Android:** Settings → AI Configuration → paste your Groq key.
+  4. Done — unlimited animations forever.
+
+## 🚀 Getting Started (Developers)
 
 ### Quick Start (2 minutes)
 1. Get a free Groq API key at [console.groq.com](https://console.groq.com/keys) — no credit card needed.

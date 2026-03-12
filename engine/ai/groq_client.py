@@ -2,9 +2,13 @@ import asyncio
 import os
 from groq import AsyncGroq
 
-client = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY", ""))
-
-async def generate(prompt: str, model: str = "llama-3.3-70b-versatile") -> str:
+async def generate(prompt: str, model: str = "llama-3.3-70b-versatile", api_key: str = None) -> str:
+    key = api_key or os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        raise ValueError("No Groq API key available")
+    
+    client = AsyncGroq(api_key=key)
+    
     last_error = None
     for attempt in range(3):
         try:

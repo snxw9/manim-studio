@@ -2,9 +2,13 @@ import asyncio
 import google.generativeai as genai
 import os
 
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
-
-async def generate(prompt: str, model: str = "gemini-2.0-flash") -> str:
+async def generate(prompt: str, model: str = "gemini-2.0-flash", api_key: str = None) -> str:
+    key = api_key or os.environ.get("GEMINI_API_KEY", "")
+    if not key:
+        raise ValueError("No Gemini API key available")
+        
+    genai.configure(api_key=key)
+    
     client = genai.GenerativeModel(
         model,
         system_instruction=(

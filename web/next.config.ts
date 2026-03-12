@@ -5,11 +5,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
-  experimental: {
-    turbo: {
-      resolveAlias: {},
-    },
-  },
 };
 
 export default nextConfig;

@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useStore } from '@/lib/store';
 import { DndContext, DragEndEvent } from '@dnd-kit/core';
-import { Loader2, Play, Wand2, RefreshCw, AlertCircle, CheckCircle2, Zap } from 'lucide-react';
+import { Loader2, Play, Wand2, RefreshCw, AlertCircle, CheckCircle2, Zap, Settings, X } from 'lucide-react';
 import MonacoEditor from '@/components/MonacoEditor';
 import VoicePrompt from '@/components/VoicePrompt';
 import TemplateLibrary from '@/components/TemplateLibrary';
@@ -15,6 +15,7 @@ import DragDropBuilder from '@/components/DragDropBuilder';
 import ExportPanel from '@/components/ExportPanel';
 import BrowserNotice from '@/components/BrowserNotice';
 import ClientOnly from '@/components/ClientOnly';
+import ApiKeySettings from '@/components/ApiKeySettings';
 
 function EngineStatusBanner() {
   const { engineStatus, setEngineStatus } = useStore();
@@ -116,8 +117,16 @@ export default function Home() {
     lastModel,
     setLastModel,
     errorMessage,
-    setErrorMessage
+    setErrorMessage,
+    userKeys,
+    setUserKeys,
+    remainingToday,
+    setRemainingToday,
+    usingOwnKey,
+    setUsingOwnKey
   } = useStore();
+
+  const [showSettings, setShowSettings] = useState(false);
 
   const filename = useMemo(() => {
     const match = generatedCode.match(/class\s+(\w+)\s*\(/);
@@ -158,14 +167,18 @@ export default function Home() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, template: selectedTemplate }),
+        body: JSON.stringify({ 
+          prompt, 
+          template: selectedTemplate,
+          user_keys: userKeys 
+        }),
       });
   
       const data = await res.json();
   
       if (!res.ok) {
         // Parse the error message cleanly
-        let errorMsg = data.detail || data.error || 'Generation failed';
+        let errorMsg = data.error || 'Generation failed';
         
         // Strip the JSON wrapper if present
         if (errorMsg.startsWith('500:')) {
@@ -173,14 +186,13 @@ export default function Home() {
         }
         
         // Check for quota error specifically
-        if (errorMsg.toLowerCase().includes('quota') || errorMsg.includes('429')) {
+        if (errorMsg.toLowerCase().includes('quota') || errorMsg.includes('429') || data.error === 'daily_limit_reached') {
           setRenderStatus('error');
           setErrorMessage(
             '⚠️ API quota exhausted. To fix this:\n\n' +
-            '• Gemini: Add billing at aistudio.google.com (free tier has daily limits)\n' +
-            '• OpenAI: Add credits at platform.openai.com/settings/billing\n' +
+            '• Add your own Groq API key in Settings (it\'s free!)\n' +
             '• Or wait — free tier resets daily\n\n' +
-            'Tip: Gemini has a generous free paid tier at very low cost.'
+            'Tip: A free Groq key gives you unlimited generations.'
           );
           return;
         }
@@ -194,6 +206,10 @@ export default function Home() {
       setSuggestions(data.suggestions || []);
       setLastProvider(data.provider);
       setLastModel(data.model);
+      
+      if (data.remaining_today !== undefined) setRemainingToday(data.remaining_today);
+      if (data.using_own_key !== undefined) setUsingOwnKey(data.using_own_key);
+      
       setRenderStatus('idle');
   
     } catch (err: any) {
@@ -252,18 +268,38 @@ export default function Home() {
                 <Wand2 size={18} className="text-purple-500" />
                 Manim Studio
               </h1>
+              <button 
+                onClick={() => setShowSettings(!showSettings)}
+                className={`p-1.5 rounded-lg transition-colors ${showSettings ? 'bg-purple-600 text-white' : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300'}`}
+              >
+                <Settings size={18} />
+              </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <TemplateLibrary />
-              <ClientOnly fallback={
-                <div className="p-4 space-y-2">
-                  {[...Array(6)].map((_, i) => (
-                    <div key={i} className="h-12 bg-white/5 rounded-lg animate-pulse" />
-                  ))}
+              {showSettings ? (
+                <div className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Configuration</h2>
+                    <button onClick={() => setShowSettings(false)} className="text-zinc-600 hover:text-zinc-400">
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <ApiKeySettings onKeysChange={setUserKeys} />
                 </div>
-              }>
-                <AssetLibrary />
-              </ClientOnly>
+              ) : (
+                <>
+                  <TemplateLibrary />
+                  <ClientOnly fallback={
+                    <div className="p-4 space-y-2">
+                      {[...Array(6)].map((_, i) => (
+                        <div key={i} className="h-12 bg-white/5 rounded-lg animate-pulse" />
+                      ))}
+                    </div>
+                  }>
+                    <AssetLibrary />
+                  </ClientOnly>
+                </>
+              )}
             </div>
             <div className="p-4 border-t border-zinc-800">
               <ProjectManager />
@@ -297,20 +333,36 @@ export default function Home() {
               )}
 
               <div className="flex-1" />
-              <button
-                onClick={activeTab === 'code' ? handleRender : handleGenerate}
-                disabled={renderStatus === 'generating' || renderStatus === 'rendering'}
-                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-1.5 rounded-md text-sm font-medium disabled:opacity-50 transition-colors shadow-sm"
-              >
-                {(renderStatus === 'generating' || renderStatus === 'rendering') ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : activeTab === 'code' ? (
-                  <Play size={16} />
-                ) : (
-                  <Wand2 size={16} />
+              <div className="flex flex-col items-end mr-4">
+                <button
+                  onClick={activeTab === 'code' ? handleRender : handleGenerate}
+                  disabled={renderStatus === 'generating' || renderStatus === 'rendering'}
+                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-1.5 rounded-md text-sm font-medium disabled:opacity-50 transition-colors shadow-sm"
+                >
+                  {(renderStatus === 'generating' || renderStatus === 'rendering') ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : activeTab === 'code' ? (
+                    <Play size={16} />
+                  ) : (
+                    <Wand2 size={16} />
+                  )}
+                  {activeTab === 'code' ? 'Render Final' : 'Generate Code'}
+                </button>
+                {activeTab === 'prompt' && remainingToday !== null && !usingOwnKey && (
+                  <p className="text-[10px] text-white/40 mt-1">
+                    {remainingToday} free generations left today • 
+                    <button onClick={() => setShowSettings(true)} className="ml-1 text-purple-400 hover:text-purple-300 underline">
+                      Unlimited with key
+                    </button>
+                  </p>
                 )}
-                {activeTab === 'code' ? 'Render Final' : 'Generate Code'}
-              </button>
+                {activeTab === 'prompt' && usingOwnKey && (
+                  <p className="text-[10px] text-green-500/60 mt-1 flex items-center gap-1">
+                    <Zap size={8} className="fill-green-500/60" />
+                    ⚡ Unlimited generations active
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Main Area */}
