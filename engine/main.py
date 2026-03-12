@@ -73,11 +73,35 @@ class CleanupRequest(BaseModel):
     scene_name: str
 
 from ai.provider_pool import get_pool
+from templates.library import get_template, list_templates
+from templates.assets import get_asset, list_assets, get_assets_by_category
 
 @app.get("/pool/status")
 async def pool_status():
     """Shows current provider rotation state — useful for debugging."""
     return get_pool().status()
+
+@app.get("/templates")
+async def get_templates():
+    return {"templates": list_templates()}
+
+@app.get("/templates/{template_id}")
+async def get_template_code(template_id: str):
+    template = get_template(template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
+    return template
+
+@app.get("/assets")
+async def get_assets():
+    return {"assets": list_assets(), "by_category": get_assets_by_category()}
+
+@app.get("/assets/{asset_id}")
+async def get_asset_snippet(asset_id: str):
+    asset = get_asset(asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail=f"Asset '{asset_id}' not found")
+    return asset
 
 @app.get("/health")
 async def health():
