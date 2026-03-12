@@ -18,8 +18,8 @@ BANNED_PATTERNS = {
         "Sector does not accept inner_radius. Use AnnularSector(inner_radius=..., outer_radius=...) for ring shapes",
     
     # LaTeX escape sequence errors  
-    r'(?<!r)["\'].*?(?<!\\)\\[a-zA-Z].*?["\']':
-        "Possible invalid LaTeX escape. Use raw strings: r'\\alpha' instead of '\\alpha'. Check all strings containing backslashes.",
+    # r'(?<!r)(?<!\\)(?:"[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\')(?<=\\[a-zA-Z])':
+    #    "Possible invalid LaTeX escape. Use raw strings: r'\\alpha' instead of '\\alpha'. Check all strings containing backslashes.",
 }
 
 def fix_latex_escapes(code: str) -> str:

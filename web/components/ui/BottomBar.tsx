@@ -8,8 +8,16 @@ export function BottomBar() {
       
       {/* Engine Status */}
       <div className="flex items-center gap-2">
-        <span className={`w-1.5 h-1.5 rounded-full ${engineStatus === 'online' ? 'bg-green-500' : 'bg-red-500'}`} />
-        <span className="text-[11px] text-[var(--text-dim)]">Engine {engineStatus}</span>
+        <span className={`w-1.5 h-1.5 rounded-full ${
+          engineStatus === 'online' ? 'bg-green-500' : 
+          engineStatus === 'offline' ? 'bg-red-500' : 
+          'bg-gray-500 animate-pulse'
+        }`} />
+        <span className="text-[11px] text-[var(--text-dim)]">
+          {engineStatus === 'online' ? 'Engine online' : 
+           engineStatus === 'offline' ? 'Engine offline' : 
+           'Checking...'}
+        </span>
       </div>
 
       {/* Generation Info */}

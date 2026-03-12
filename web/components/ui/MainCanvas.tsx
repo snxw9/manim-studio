@@ -1,5 +1,5 @@
 import { useStore } from '@/lib/store';
-import { Mic, Copy, Loader2 } from 'lucide-react';
+import { Mic, Copy, Play } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 
@@ -26,6 +26,9 @@ export function MainCanvas() {
 
   const [isRecording, setIsRecording] = useState(false);
   const [recognition, setRecognition] = useState<any>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewStatus, setPreviewStatus] = useState<'idle' | 'rendering' | 'ready' | 'error'>('idle');
 
   useEffect(() => {
     if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
@@ -36,8 +39,10 @@ export function MainCanvas() {
       
       rec.onresult = (e: any) => {
         let transcript = '';
-        for (let i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
-        setPrompt((prev: string) => prev + (prev ? ' ' : '') + transcript);
+        for (let i = 0; i < e.results.length; i++) {
+          if (e.results[i].isFinal) transcript += e.results[i][0].transcript;
+        }
+        if (transcript) setPrompt((prev: string) => prev + (prev ? ' ' : '') + transcript);
       };
       rec.onerror = () => setIsRecording(false);
       rec.onend = () => setIsRecording(false);
@@ -57,9 +62,8 @@ export function MainCanvas() {
 
   const handleGenerate = async () => {
     setRenderStatus('generating');
-    setGeneratedCode('');
     try {
-      const res = await fetch(`${engineUrl}/generate`, {
+      const res = await fetch(`/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, template: selectedTemplate || 'none', user_keys: userKeys }),
@@ -81,6 +85,48 @@ export function MainCanvas() {
     } catch (err: any) {
       setRenderStatus('error');
       setErrorMessage(err.message);
+    }
+  };
+
+  const runPreview = async () => {
+    if (!generatedCode.trim()) return;
+    setPreviewStatus('rendering');
+    setPreviewError(null);
+
+    try {
+      const res = await fetch('/api/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: generatedCode }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setPreviewError(data.error || 'Preview failed');
+        setPreviewStatus('error');
+        return;
+      }
+
+      // Convert base64 to blob URL
+      const byteChars = atob(data.video);
+      const byteNums = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNums[i] = byteChars.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNums);
+      const blob = new Blob([byteArray], { type: 'video/mp4' });
+      
+      // Revoke old URL
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+      setPreviewStatus('ready');
+
+    } catch (err: any) {
+      setPreviewError(`Network error: ${err.message}`);
+      setPreviewStatus('error');
     }
   };
 
@@ -164,7 +210,12 @@ export function MainCanvas() {
             <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--bg-border)] shrink-0">
               <span className="text-[10px] font-mono text-[var(--text-dim)] uppercase tracking-widest bg-[#1a1510] px-2 py-0.5 rounded">Python</span>
               <div className="flex items-center gap-2">
-                <button className="text-xs text-[var(--text-secondary)] px-3 py-1 border border-[var(--bg-border)] rounded hover:border-[var(--accent)] transition-colors">
+                <button 
+                  onClick={runPreview}
+                  disabled={previewStatus === 'rendering'}
+                  className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)] px-3 py-1 border border-[var(--bg-border)] rounded hover:border-[var(--accent)] transition-colors disabled:opacity-50"
+                >
+                  {previewStatus === 'rendering' ? <div className="w-3 h-3 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" /> : <Play size={12} />}
                   Run Preview
                 </button>
                 <button className="text-xs text-[var(--text-secondary)] px-3 py-1 border border-[var(--bg-border)] rounded hover:border-[var(--accent)] transition-colors">
@@ -178,41 +229,77 @@ export function MainCanvas() {
                 </button>
               </div>
             </div>
-            <div className="flex-1 relative">
-              <Editor
-                value={generatedCode}
-                onChange={(v) => setGeneratedCode(v || '')}
-                language="python"
-                theme="manim-dark"
-                beforeMount={(monaco) => {
-                  monaco.editor.defineTheme('manim-dark', {
-                    base: 'vs-dark',
-                    inherit: true,
-                    rules: [
-                      { token: 'keyword', foreground: 'e8621a' },
-                      { token: 'string', foreground: 'c4a882' },
-                      { token: 'comment', foreground: '605040' },
-                      { token: 'identifier', foreground: 'f5f0e8' }
-                    ],
-                    colors: {
-                      'editor.background': '#0a0602',
-                      'editor.foreground': '#f5f0e8',
-                      'editor.lineHighlightBackground': '#1a1510',
-                      'editor.selectionBackground': '#e8621a22',
-                      'editorCursor.foreground': '#e8621a',
-                      'editorLineNumber.foreground': '#60504080'
-                    }
-                  });
-                }}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  fontFamily: 'var(--font-mono)',
-                  padding: { top: 16 },
-                  scrollBeyondLastLine: false,
-                  wordWrap: 'on'
-                }}
-              />
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+              <div className="flex-1 relative border-r border-[var(--bg-border)]">
+                <Editor
+                  value={generatedCode}
+                  onChange={(v) => setGeneratedCode(v || '')}
+                  language="python"
+                  theme="manim-dark"
+                  beforeMount={(monaco) => {
+                    monaco.editor.defineTheme('manim-dark', {
+                      base: 'vs-dark',
+                      inherit: true,
+                      rules: [
+                        { token: 'keyword', foreground: 'e8621a' },
+                        { token: 'string', foreground: 'c4a882' },
+                        { token: 'comment', foreground: '605040' },
+                        { token: 'identifier', foreground: 'f5f0e8' }
+                      ],
+                      colors: {
+                        'editor.background': '#0a0602',
+                        'editor.foreground': '#f5f0e8',
+                        'editor.lineHighlightBackground': '#1a1510',
+                        'editor.selectionBackground': '#e8621a22',
+                        'editorCursor.foreground': '#e8621a',
+                        'editorLineNumber.foreground': '#60504080'
+                      }
+                    });
+                  }}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    fontFamily: 'var(--font-mono)',
+                    padding: { top: 16 },
+                    scrollBeyondLastLine: false,
+                    wordWrap: 'on'
+                  }}
+                />
+              </div>
+              
+              {/* Quick Preview Area */}
+              {(previewUrl || previewError || previewStatus === 'rendering') && (
+                <div className="w-full lg:w-80 bg-black border-l border-[var(--bg-border)] flex flex-col shrink-0">
+                  <div className="flex-1 flex flex-col relative overflow-hidden">
+                    {previewStatus === 'rendering' && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-10 text-xs text-orange-500 font-medium animate-pulse">
+                        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4" />
+                        Rendering preview...
+                      </div>
+                    )}
+                    
+                    {previewError && (
+                      <div className="p-4 text-red-400 text-xs font-mono whitespace-pre-wrap overflow-auto h-full bg-red-950/20">
+                        <div className="font-bold mb-2 uppercase tracking-widest text-[10px] opacity-60">Manim Error</div>
+                        {previewError}
+                      </div>
+                    )}
+                    
+                    {previewUrl && !previewError && (
+                      <video
+                        key={previewUrl}
+                        src={previewUrl}
+                        autoPlay
+                        muted
+                        loop
+                        playsInline
+                        controls
+                        className="w-full h-full object-contain"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -1,38 +1,36 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-const ENGINE_URL = 'http://127.0.0.1:8000';
-
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const { code, quality, format } = await req.json();
-
-    const response = await fetch(`${ENGINE_URL}/render`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        code, 
-        is_preview: false,
-        quality: quality || '1080p',
-        format: format || 'mp4'
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Engine /render error:", errorText);
-      return NextResponse.json({ error: errorText }, { status: response.status });
+    
+    if (!code?.trim()) {
+      return NextResponse.json({ error: 'No code provided' }, { status: 400 });
     }
 
-    const blob = await response.blob();
-    return new Response(blob, {
-      headers: { 
-        'Content-Type': response.headers.get('Content-Type') || 'video/mp4',
-        'Content-Disposition': response.headers.get('Content-Disposition') || ''
-      }
+    const engineRes = await fetch('http://localhost:8000/render', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, quality, format }),
+      signal: AbortSignal.timeout(300000), // 5 min timeout for high quality renders
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("API /render error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+
+    const data = await engineRes.json();
+
+    if (!engineRes.ok) {
+      return NextResponse.json({
+        error: data.detail || 'Engine error',
+      }, { status: engineRes.status });
+    }
+
+    return NextResponse.json(data);
+
+  } catch (err: any) {
+    const isOffline = err.message?.includes('ECONNREFUSED') || err.name === 'TimeoutError';
+    return NextResponse.json({
+      error: isOffline
+        ? 'Engine is offline or render timed out.'
+        : `Render failed: ${err.message}`,
+    }, { status: 503 });
   }
 }

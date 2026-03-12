@@ -23,11 +23,18 @@ export function Topbar() {
   const settingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch(`${engineUrl}/pool/status`)
+    fetch('/api/health')
       .then(res => res.json())
-      .then(data => setPoolStatus(data))
+      .then(data => {
+        if (data.online) {
+          fetch('http://localhost:8000/pool/status')
+            .then(res => res.json())
+            .then(status => setPoolStatus(status))
+            .catch(() => {});
+        }
+      })
       .catch(() => {});
-  }, [engineUrl]);
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

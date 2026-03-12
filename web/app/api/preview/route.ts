@@ -1,46 +1,36 @@
-import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const { code } = await req.json();
+    
+    if (!code?.trim()) {
+      return NextResponse.json({ error: 'No code provided' }, { status: 400 });
+    }
 
     const engineRes = await fetch('http://localhost:8000/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
-      signal: AbortSignal.timeout(90000),
+      signal: AbortSignal.timeout(120000),
     });
-    
-    if (!engineRes.ok) {
-      const err = await engineRes.text();
-      console.error('[preview route] Engine error:', engineRes.status, err);
-      return NextResponse.json({ 
-        error: `Engine error ${engineRes.status}`,
-        detail: err,
-        fix: 'Check if the Manim code is valid or if the engine logs show more details.'
-      }, { status: 500 });
-    }
-    
+
     const data = await engineRes.json();
-    console.log('[preview route] Engine response:', data);
-    
-    if (!data.videoPath) {
-      return NextResponse.json({ error: 'Engine returned no video path', detail: data }, { status: 500 });
+
+    if (!engineRes.ok) {
+      return NextResponse.json({
+        error: data.detail || 'Engine error',
+      }, { status: engineRes.status });
     }
-    
-    // Serve the video file as base64 so the browser can play it
-    const videoBuffer = await fs.readFile(data.videoPath);
-    const base64 = videoBuffer.toString('base64');
-    return NextResponse.json({ video: base64, mimeType: 'video/mp4' });
-    
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('[preview route] Fetch failed:', message);
-    return NextResponse.json({ 
-      error: 'Could not reach Python engine',
-      detail: message,
-      fix: 'Make sure the engine is running: cd engine && uvicorn main:app --reload --port 8000'
+
+    return NextResponse.json(data);
+
+  } catch (err: any) {
+    const isOffline = err.message?.includes('ECONNREFUSED') || err.name === 'TimeoutError';
+    return NextResponse.json({
+      error: isOffline
+        ? 'Engine is offline. Start it with: cd engine && uvicorn main:app --reload --port 8000'
+        : `Preview failed: ${err.message}`,
     }, { status: 503 });
   }
 }

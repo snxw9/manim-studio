@@ -9,7 +9,6 @@ export function RightPanel() {
     generatedCode,
     videoQuality,
     videoFormat,
-    engineUrl,
     setVideoUrl,
     setVideoBlob,
     setPreviewErrors
@@ -25,7 +24,7 @@ export function RightPanel() {
     if (!generatedCode) return;
     setRenderStatus('rendering');
     try {
-      const res = await fetch(`${engineUrl}/render`, {
+      const res = await fetch('/api/render', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -35,25 +34,40 @@ export function RightPanel() {
         })
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        if (res.status === 422) {
-          const data = await res.json();
-          setPreviewErrors(data.details || []);
-          throw new Error(data.error);
-        }
-        const data = await res.json();
-        throw new Error(data.error);
+        setRenderStatus('error');
+        alert(data.error || 'Render failed');
+        return;
       }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      setVideoUrl(url);
-      setVideoBlob(blob);
+      // data.videoUrl is relative to engine root, e.g., /outputs/Scene_1080p.mp4
+      const fullUrl = `http://localhost:8000${data.videoUrl}`;
+      setVideoUrl(fullUrl);
       setRenderStatus('done');
     } catch (error: any) {
       console.error(error);
       setRenderStatus('error');
       alert(error.message);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!videoUrl) return;
+    try {
+      const res = await fetch(videoUrl);
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      alert('Download failed');
     }
   };
 
@@ -63,7 +77,7 @@ export function RightPanel() {
       {/* Preview Section */}
       <div className="h-[240px] bg-black relative flex flex-col border-b border-[var(--bg-border)]">
         {videoUrl ? (
-          <video src={videoUrl} controls autoPlay muted loop className="w-full h-full object-contain" />
+          <video key={videoUrl} src={videoUrl} controls autoPlay muted loop className="w-full h-full object-contain" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center opacity-20">
             <svg width="100" height="40" viewBox="0 0 100 40">
@@ -113,7 +127,11 @@ export function RightPanel() {
           <button className="flex-1 py-1.5 text-xs text-[var(--text-secondary)] border border-[var(--bg-border)] rounded hover:border-[var(--accent)] hover:text-[var(--text-primary)] transition-colors">
             Save
           </button>
-          <button className="flex-1 py-1.5 text-xs text-[var(--text-secondary)] border border-[var(--bg-border)] rounded hover:border-[var(--accent)] hover:text-[var(--text-primary)] transition-colors">
+          <button 
+            onClick={handleDownload}
+            disabled={!videoUrl}
+            className="flex-1 py-1.5 text-xs text-[var(--text-secondary)] border border-[var(--bg-border)] rounded hover:border-[var(--accent)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-30"
+          >
             Download
           </button>
         </div>

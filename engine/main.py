@@ -1,10 +1,17 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
 import os
 import hashlib
+import base64
+import glob
+import re
+import subprocess
+import tempfile
+import shutil
 from collections import defaultdict
 from datetime import date
 from dotenv import load_dotenv
@@ -12,6 +19,8 @@ from ai.model_router import generate_with_fallback, select_tier
 from renderer.manim_runner import run_manim, cleanup_previews
 from renderer.preview_renderer import render_preview
 from renderer.code_validator import validate_manim_code
+from templates.library import get_template, list_templates
+from templates.assets import get_asset, list_assets, get_assets_by_category
 
 # Load .env from root directory
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -21,11 +30,16 @@ app = FastAPI(title="Manim Studio Engine API")
 # Add CORS headers so Next.js can reach the engine
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"], # Allow all for now to avoid CORS issues during debug
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Ensure outputs directory exists and mount it
+OUTPUTS_DIR = os.path.abspath(os.getenv("MANIM_OUTPUT_DIR", "./outputs"))
+os.makedirs(OUTPUTS_DIR, exist_ok=True)
+app.mount("/outputs", StaticFiles(directory=OUTPUTS_DIR), name="outputs")
 
 # In-memory store: device_id -> {date, count}
 _usage: dict[str, dict] = defaultdict(lambda: {"date": None, "count": 0})
@@ -73,8 +87,6 @@ class CleanupRequest(BaseModel):
     scene_name: str
 
 from ai.provider_pool import get_pool
-from templates.library import get_template, list_templates
-from templates.assets import get_asset, list_assets, get_assets_by_category
 
 @app.get("/pool/status")
 async def pool_status():
@@ -111,13 +123,11 @@ async def health():
 async def generate_code(request: GenerateRequest, http_request: Request):
     try:
         user_keys = request.user_keys or {}
-        # If the user has provided ANY key, they might be attempting unlimited generations
         has_any_user_key = any(val and val.strip() for val in user_keys.values())
         
         device_id = get_device_id(http_request)
         env_allowed, remaining = check_rate_limit(device_id)
         
-        # If rate limit hit and user hasn't provided their own keys, block request
         if not env_allowed and not has_any_user_key:
             raise HTTPException(status_code=429, detail={
                 "error": "daily_limit_reached",
@@ -127,7 +137,6 @@ async def generate_code(request: GenerateRequest, http_request: Request):
             })
         
         tier = select_tier(request.prompt)
-        # pass allow_env_fallback=env_allowed to the router
         result = await generate_with_fallback(
             request.prompt, 
             tier, 
@@ -136,7 +145,6 @@ async def generate_code(request: GenerateRequest, http_request: Request):
         )
         
         if "error" in result and "code" not in result:
-            # Check if this was a limit error from the router
             if "Free limit reached" in result["error"]:
                 raise HTTPException(status_code=429, detail={
                     "error": "daily_limit_reached",
@@ -144,10 +152,8 @@ async def generate_code(request: GenerateRequest, http_request: Request):
                 })
             raise HTTPException(status_code=500, detail=result["error"])
         
-        # Determine if we used a user key or an env key
         used_own_key = result.get("using_own_key", False)
         
-        # If we used an environment key, increment the device's usage
         if not used_own_key:
             increment_usage(device_id)
             remaining -= 1
@@ -168,71 +174,145 @@ async def generate_code(request: GenerateRequest, http_request: Request):
 
 @app.post("/preview")
 async def preview(request: PreviewRequest):
-    try:
-        # Validate code before previewing
-        validation = validate_manim_code(request.code)
-        if not validation["valid"]:
-            return JSONResponse(status_code=422, content={
-                "error": "Code has errors — fix before previewing",
-                "details": validation["errors"]
-            })
+    code = request.code.strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="No code provided")
 
-        output_path = run_manim(
-            validation["fixed_code"],
-            preview=True,
-            quality="480p",
-            fmt="mp4"
-        )
-        
-        if not os.path.exists(output_path):
-            raise HTTPException(status_code=500, detail=f"Preview file not found at {output_path}")
-            
-        return {"videoPath": os.path.abspath(output_path)}
-    except Exception as e:
-        print(f"Error in /preview: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # Extract class name
+    match = re.search(r'class\s+(\w+)\s*\(', code)
+    if not match:
+        raise HTTPException(status_code=400, detail="No Scene class found in code")
+    class_name = match.group(1)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Write code to temp file
+        code_file = os.path.join(tmpdir, "scene.py")
+        with open(code_file, "w", encoding="utf-8") as f:
+            f.write(code)
+
+        # Run manim
+        cmd = [
+            "manim", "-ql",
+            "--format", "mp4",
+            "--media_dir", tmpdir,
+            "--disable_caching",
+            code_file,
+            class_name,
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=tmpdir,
+                capture_output=True,
+                text=True,
+                timeout=90,
+            )
+        except subprocess.TimeoutExpired:
+            raise HTTPException(status_code=408, detail="Preview render timed out")
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=500,
+                detail="manim not found. Is it installed in the virtual environment?"
+            )
+
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Manim error:\n{result.stderr[-2000:]}"
+            )
+
+        # Find output file
+        pattern = os.path.join(tmpdir, "**", f"{class_name}.mp4")
+        matches = glob.glob(pattern, recursive=True)
+
+        if not matches:
+            pattern2 = os.path.join(tmpdir, "**", "*.mp4")
+            matches = glob.glob(pattern2, recursive=True)
+
+        if not matches:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Render completed but no output file found.\nStdout: {result.stdout[-1000:]}\nStderr: {result.stderr[-1000:]}"
+            )
+
+        video_path = max(matches, key=os.path.getctime)
+        with open(video_path, "rb") as f:
+            video_bytes = f.read()
+
+        return {
+            "video": base64.b64encode(video_bytes).decode(),
+            "mimeType": "video/mp4",
+            "className": class_name,
+            "size": len(video_bytes),
+        }
 
 @app.post("/render")
 async def render_code(request: RenderRequest):
-    try:
-        # Validate code before rendering
-        validation = validate_manim_code(request.code)
-        if not validation["valid"]:
-            return JSONResponse(status_code=422, content={
-                "error": "Invalid Manim code",
-                "details": validation["errors"],
-                "suggestion": "Use the /generate endpoint to auto-fix this code"
-            })
+    code = request.code.strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="No code provided")
 
-        print(f"Render requested: quality={request.quality}, format={request.format}, is_preview={request.is_preview}")
-        output_path = run_manim(
-            validation["fixed_code"], 
-            preview=request.is_preview, 
-            quality=request.quality, 
-            fmt=request.format
-        )
+    # Extract class name
+    match = re.search(r'class\s+(\w+)\s*\(', code)
+    if not match:
+        raise HTTPException(status_code=400, detail="No Scene class found in code")
+    class_name = match.group(1)
+
+    # Quality map
+    quality_map = {
+        "480p": "-ql",
+        "720p": "-qm",
+        "1080p": "-qh",
+        "2160p": "-qk"
+    }
+    q_flag = quality_map.get(request.quality, "-qh")
+
+    # Format
+    fmt = request.format if request.format != "mov" else "mp4"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        code_file = os.path.join(tmpdir, "scene.py")
+        with open(code_file, "w", encoding="utf-8") as f:
+            f.write(code)
+
+        cmd = [
+            "manim", q_flag,
+            "--format", fmt,
+            "--media_dir", tmpdir,
+            code_file,
+            class_name,
+        ]
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+        if result.returncode != 0:
+            raise HTTPException(status_code=422, detail=f"Manim error: {result.stderr[-1000:]}")
+
+        pattern = os.path.join(tmpdir, "**", f"*.{fmt}")
+        matches = glob.glob(pattern, recursive=True)
+        if not matches:
+            raise HTTPException(status_code=500, detail="Output file not found")
+
+        orig_path = max(matches, key=os.path.getctime)
+        filename = f"{class_name}_{request.quality}.{request.format}"
+        final_path = os.path.join(OUTPUTS_DIR, filename)
         
-        if not os.path.exists(output_path):
-             raise HTTPException(status_code=500, detail=f"Rendered file not found at {output_path}")
+        shutil.copy2(orig_path, final_path)
 
-        media_type = "video/mp4"
-        if request.format == "gif":
-            media_type = "image/gif"
-        elif request.format == "webm":
-            media_type = "video/webm"
-        elif request.format == "mov":
-            media_type = "video/quicktime"
-
-        return FileResponse(output_path, media_type=media_type, filename=os.path.basename(output_path))
-    except Exception as e:
-        print(f"Error in /render: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {
+            "videoUrl": f"/outputs/{filename}",
+            "filename": filename,
+            "size": os.path.getsize(final_path)
+        }
 
 @app.post("/cleanup")
 async def cleanup(request: CleanupRequest):
     try:
-        output_dir = os.path.abspath(os.getenv("MANIM_OUTPUT_DIR", "./outputs"))
-        cleanup_previews(request.scene_name, output_dir)
+        cleanup_previews(request.scene_name, OUTPUTS_DIR)
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

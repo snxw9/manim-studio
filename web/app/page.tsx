@@ -24,19 +24,22 @@ export default function Home() {
 
   const checkEngine = useCallback(async () => {
     try {
-      const res = await fetch(`${engineUrl}/health`, { signal: AbortSignal.timeout(3000) });
-      if (res.ok) setEngineStatus('online');
-      else setEngineStatus('offline');
+      const res = await fetch('/api/health', { cache: 'no-store' });
+      const data = await res.json();
+      setEngineStatus(data.online ? 'online' : 'offline');
+      return data.online;
     } catch {
       setEngineStatus('offline');
+      return false;
     }
-  }, [engineUrl, setEngineStatus]);
+  }, [setEngineStatus]);
 
   useEffect(() => {
+    setEngineStatus('checking' as any);
     checkEngine();
     const interval = setInterval(checkEngine, 5000);
     return () => clearInterval(interval);
-  }, [checkEngine]);
+  }, [checkEngine, setEngineStatus]);
 
   useEffect(() => {
     const theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
