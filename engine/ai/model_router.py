@@ -1,37 +1,52 @@
 import asyncio
 import hashlib
+import json
 import os
+from pathlib import Path
 from typing import Literal
 
 ModelTier = Literal["fast", "standard", "smart"]
 
+CACHE_DIR = Path(__file__).parent.parent / "cache"
+CACHE_DIR.mkdir(exist_ok=True)
+
 # Ordered fallback chains — tries each model in order until one works
 FALLBACK_CHAIN = {
     "fast": [
+        {"provider": "groq",   "model": "llama-3.1-8b-instant"},
         {"provider": "gemini", "model": "gemini-2.0-flash"},
-        {"provider": "gemini", "model": "gemini-1.5-flash"},
-        {"provider": "openai",  "model": "gpt-4o-mini"},
-        {"provider": "openai",  "model": "gpt-3.5-turbo"},
+        {"provider": "openai", "model": "gpt-4o-mini"},
     ],
     "standard": [
+        {"provider": "groq",   "model": "llama-3.3-70b-versatile"},
         {"provider": "gemini", "model": "gemini-2.0-flash"},
-        {"provider": "gemini", "model": "gemini-1.5-flash"},
-        {"provider": "openai",  "model": "gpt-4o-mini"},
-        {"provider": "openai",  "model": "gpt-3.5-turbo"},
+        {"provider": "openai", "model": "gpt-4o-mini"},
     ],
     "smart": [
+        {"provider": "groq",   "model": "llama-3.3-70b-versatile"},
         {"provider": "gemini", "model": "gemini-2.5-pro-preview-05-06"},
-        {"provider": "gemini", "model": "gemini-2.0-flash"},
-        {"provider": "openai",  "model": "gpt-4o"},
-        {"provider": "openai",  "model": "gpt-4o-mini"},
+        {"provider": "openai", "model": "gpt-4o"},
     ],
 }
 
-# In-memory cache to avoid re-generating identical prompts
-_cache: dict[str, dict] = {}
-
 def _cache_key(prompt: str) -> str:
     return hashlib.md5(prompt.strip().lower().encode()).hexdigest()
+
+def _load_cache(key: str) -> dict | None:
+    path = CACHE_DIR / f"{key}.json"
+    if path.exists():
+        try:
+            return json.loads(path.read_text())
+        except:
+            return None
+    return None
+
+def _save_cache(key: str, result: dict):
+    path = CACHE_DIR / f"{key}.json"
+    # Don't cache errors
+    if "error" in result:
+        return
+    path.write_text(json.dumps(result))
 
 def select_tier(prompt: str) -> ModelTier:
     word_count = len(prompt.split())
@@ -53,12 +68,18 @@ async def generate_with_fallback(prompt: str, tier: ModelTier = "standard") -> d
     """Try each model in the fallback chain sequentially. Stop at first success."""
     from ai.gemini_client import generate as gemini_generate
     from ai.openai_client import generate as openai_generate
+    try:
+        from ai.groq_client import generate as groq_generate
+    except ImportError:
+        groq_generate = None
     from renderer.code_validator import validate_manim_code
 
-    # Check cache first
+    # Check disk cache first
     key = _cache_key(prompt)
-    if key in _cache:
-        return {**_cache[key], "cached": True}
+    cached = _load_cache(key)
+    if cached:
+        print(f"[cache] Hit — skipping network entirely")
+        return {**cached, "cached": True}
 
     chain = FALLBACK_CHAIN[tier]
     last_error = None
@@ -68,6 +89,8 @@ async def generate_with_fallback(prompt: str, tier: ModelTier = "standard") -> d
         model = entry["model"]
 
         # Skip providers with missing API keys
+        if provider == "groq" and not os.getenv("GROQ_API_KEY"):
+            continue
         if provider == "gemini" and not os.getenv("GEMINI_API_KEY"):
             continue
         if provider == "openai" and not os.getenv("OPENAI_API_KEY"):
@@ -76,10 +99,14 @@ async def generate_with_fallback(prompt: str, tier: ModelTier = "standard") -> d
         try:
             print(f"[model_router] Trying {provider}/{model}...")
 
-            if provider == "gemini":
+            if provider == "groq" and groq_generate:
+                code = await groq_generate(prompt, model=model)
+            elif provider == "gemini":
                 code = await gemini_generate(prompt, model=model)
-            else:
+            elif provider == "openai":
                 code = await openai_generate(prompt, model=model)
+            else:
+                continue
 
             validation = validate_manim_code(code)
             result = {
@@ -91,7 +118,7 @@ async def generate_with_fallback(prompt: str, tier: ModelTier = "standard") -> d
             }
 
             # Cache successful results
-            _cache[key] = result
+            _save_cache(key, result)
             print(f"[model_router] Success with {provider}/{model}")
             return result
 
@@ -128,13 +155,12 @@ def _build_user_error(last_error: dict | None) -> str:
     if is_quota_error(err):
         return (
             "API quota exhausted on all providers. Options:\n"
-            "1. Wait for quota reset (usually resets daily/per minute)\n"
-            "2. Add billing to your Gemini account at https://aistudio.google.com\n"
-            "3. Add billing to your OpenAI account at https://platform.openai.com/settings/billing\n"
-            "4. Check your GEMINI_API_KEY and OPENAI_API_KEY are correct in engine/.env"
+            "1. Wait for quota reset\n"
+            "2. Add billing to your Groq/Gemini/OpenAI account\n"
+            "3. Check your API keys in engine/.env"
         )
     if is_auth_error(err):
-        return "Invalid API key. Check GEMINI_API_KEY and OPENAI_API_KEY in engine/.env"
+        return "Invalid API key. Check engine/.env"
     
     return f"Generation failed: {err[:200]}"
 

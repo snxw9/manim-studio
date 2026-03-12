@@ -10,47 +10,24 @@
 
 ## 🚀 Getting Started
 
+### Quick Start (2 minutes)
+1. Get a free Groq API key at [console.groq.com](https://console.groq.com/keys) — no credit card needed.
+2. Run: `cd engine && python setup.py` (paste your key when prompted).
+3. Run: `cd ../web && npm install && npm run dev`.
+4. Open `http://localhost:3000` and start animating.
+
+### For Android
+1. Build and install the APK.
+2. Open **Settings → AI Configuration**.
+3. Paste your Groq API key.
+4. Tap **Test Connection** → Start animating.
+
 ### Prerequisites
 - Python 3.10+
 - Node.js 20+
 - Android Studio (for mobile development)
 - FFmpeg installed and in your system PATH
-- Gemini or OpenAI API keys
-
-### 1. Set up the Python Engine
-```bash
-cd engine/
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 2. Set up Environment Variables
-Copy the `.env.example` file to `.env` in the root directory:
-```bash
-cp .env.example .env
-```
-Add your `GEMINI_API_KEY` to the `.env` file.
-
-### 3. Run the Engine API
-```bash
-cd engine/
-uvicorn main:app --reload --port 8000
-```
-
-### 4. Run the Web App
-In a new terminal window:
-```bash
-cd web/
-npm install
-npm run dev
-```
-Open `http://localhost:3000` in your browser.
-
-### 5. Build the Android App
-1. Open the `android/` directory in Android Studio.
-2. Let Gradle sync and resolve all dependencies.
-3. Build and run on an emulator or physical device.
+- Groq, Gemini, or OpenAI API keys
 
 ## 🧪 Testing
 

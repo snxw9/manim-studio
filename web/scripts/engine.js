@@ -43,7 +43,7 @@ function run(cmd, opts = {}) {
 async function main() {
   if (await isPortInUse(PORT)) {
     log('Already running on port 8000 ✓');
-    return;
+    await new Promise(() => {});
   }
 
   if (!fs.existsSync(ENGINE_DIR)) {

@@ -11,3 +11,4 @@ langchain
 google-generativeai
 openai
 python-dotenv
+groq
