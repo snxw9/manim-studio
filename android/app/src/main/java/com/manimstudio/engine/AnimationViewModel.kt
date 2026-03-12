@@ -19,11 +19,20 @@ class AnimationViewModel : ViewModel() {
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
 
+    private val _poolStatus = MutableStateFlow<org.json.JSONObject?>(null)
+    val poolStatus: StateFlow<org.json.JSONObject?> = _poolStatus.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
     fun updatePrompt(newPrompt: String) {
         _prompt.value = newPrompt
+    }
+
+    fun fetchPoolStatus() {
+        viewModelScope.launch {
+            _poolStatus.value = GroqClient.getPoolStatus()
+        }
     }
 
     fun generateAnimation(context: Context) {
@@ -36,6 +45,7 @@ class AnimationViewModel : ViewModel() {
             try {
                 val code = GroqClient.generate(context, currentPrompt)
                 _generatedCode.value = code
+                fetchPoolStatus()
             } catch (e: Exception) {
                 _error.value = e.message ?: "Generation failed"
             } finally {

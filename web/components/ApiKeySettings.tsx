@@ -52,7 +52,7 @@ export default function ApiKeySettings({ onKeysChange }: { onKeysChange: (keys: 
       <div>
         <h3 className="text-sm font-semibold text-white/80">🔑 API Keys (Optional)</h3>
         <p className="text-xs text-white/40 mt-1">
-          Add your own key for unlimited generations. Without a key you get 10 free generations/day.
+          Add your own key for unlimited generations. Without a key you get 20 free generations/day.
         </p>
       </div>
 

@@ -30,18 +30,15 @@ app.add_middleware(
 # In-memory store: device_id -> {date, count}
 _usage: dict[str, dict] = defaultdict(lambda: {"date": None, "count": 0})
 
-FREE_DAILY_LIMIT = 10  # generations per device per day
+FREE_DAILY_LIMIT = 20  # generations per device per day
 
 def get_device_id(request: Request) -> str:
     # Use IP as anonymous device identifier
     ip = request.client.host
     return hashlib.md5(ip.encode()).hexdigest()[:16]
 
-def check_rate_limit(device_id: str, has_own_key: bool) -> tuple[bool, int]:
-    """Returns (is_allowed, remaining)"""
-    if has_own_key:
-        return True, 999  # Own key = unlimited
-    
+def check_rate_limit(device_id: str) -> tuple[bool, int]:
+    """Returns (is_env_allowed, remaining)"""
     today = date.today().isoformat()
     usage = _usage[device_id]
     
@@ -53,8 +50,10 @@ def check_rate_limit(device_id: str, has_own_key: bool) -> tuple[bool, int]:
     if remaining <= 0:
         return False, 0
     
-    usage["count"] += 1
-    return True, remaining - 1
+    return True, remaining
+
+def increment_usage(device_id: str):
+    _usage[device_id]["count"] += 1
 
 class GenerateRequest(BaseModel):
     prompt: str
@@ -73,6 +72,13 @@ class PreviewRequest(BaseModel):
 class CleanupRequest(BaseModel):
     scene_name: str
 
+from ai.provider_pool import get_pool
+
+@app.get("/pool/status")
+async def pool_status():
+    """Shows current provider rotation state — useful for debugging."""
+    return get_pool().status()
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": "1.0"}
@@ -81,12 +87,14 @@ async def health():
 async def generate_code(request: GenerateRequest, http_request: Request):
     try:
         user_keys = request.user_keys or {}
-        has_own_key = bool(user_keys.get('groq') or user_keys.get('gemini') or user_keys.get('openai'))
+        # If the user has provided ANY key, they might be attempting unlimited generations
+        has_any_user_key = any(val and val.strip() for val in user_keys.values())
         
         device_id = get_device_id(http_request)
-        allowed, remaining = check_rate_limit(device_id, has_own_key)
+        env_allowed, remaining = check_rate_limit(device_id)
         
-        if not allowed:
+        # If rate limit hit and user hasn't provided their own keys, block request
+        if not env_allowed and not has_any_user_key:
             raise HTTPException(status_code=429, detail={
                 "error": "daily_limit_reached",
                 "message": f"Free tier limit of {FREE_DAILY_LIMIT} generations/day reached.",
@@ -95,19 +103,39 @@ async def generate_code(request: GenerateRequest, http_request: Request):
             })
         
         tier = select_tier(request.prompt)
-        result = await generate_with_fallback(request.prompt, tier, user_keys)
+        # pass allow_env_fallback=env_allowed to the router
+        result = await generate_with_fallback(
+            request.prompt, 
+            tier, 
+            user_keys, 
+            allow_env_fallback=env_allowed
+        )
         
         if "error" in result and "code" not in result:
+            # Check if this was a limit error from the router
+            if "Free limit reached" in result["error"]:
+                raise HTTPException(status_code=429, detail={
+                    "error": "daily_limit_reached",
+                    "message": result["error"]
+                })
             raise HTTPException(status_code=500, detail=result["error"])
         
+        # Determine if we used a user key or an env key
+        used_own_key = result.get("using_own_key", False)
+        
+        # If we used an environment key, increment the device's usage
+        if not used_own_key:
+            increment_usage(device_id)
+            remaining -= 1
+
         return {
             "code": result["code"],
             "provider": result.get("provider"),
             "model": result.get("model"),
             "tier": tier,
             "cached": result.get("cached", False),
-            "remaining_today": remaining,
-            "using_own_key": has_own_key,
+            "remaining_today": max(0, remaining),
+            "using_own_key": used_own_key,
         }
     except HTTPException:
         raise

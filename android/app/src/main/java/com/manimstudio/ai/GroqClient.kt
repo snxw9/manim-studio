@@ -123,6 +123,20 @@ object GroqClient {
         data.getString("code")
     }
 
+    suspend fun getPoolStatus(): JSONObject? = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url("$ENGINE_URL/pool/status")
+                .get()
+                .build()
+            val response = client.newCall(request).execute()
+            val body = response.body?.string() ?: return@withContext null
+            if (response.isSuccessful) JSONObject(body) else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private fun cleanCode(code: String): String {
         var cleaned = code.trim()
         if (cleaned.startsWith("```python")) cleaned = cleaned.removePrefix("```python")

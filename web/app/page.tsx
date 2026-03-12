@@ -127,6 +127,21 @@ export default function Home() {
   } = useStore();
 
   const [showSettings, setShowSettings] = useState(false);
+  const [poolStatus, setPoolStatus] = useState<{
+    current_provider: string;
+    uses_remaining: number;
+    exhausted: string[];
+  } | null>(null);
+
+  const fetchPoolStatus = async () => {
+    try {
+      const res = await fetch('http://localhost:8000/pool/status');
+      const data = await res.json();
+      setPoolStatus(data);
+    } catch {}
+  };
+
+  useEffect(() => { fetchPoolStatus(); }, []);
 
   const filename = useMemo(() => {
     const match = generatedCode.match(/class\s+(\w+)\s*\(/);
@@ -178,27 +193,27 @@ export default function Home() {
   
       if (!res.ok) {
         // Parse the error message cleanly
-        let errorMsg = data.error || 'Generation failed';
+        let errorMsg = data.error;
         
-        // Strip the JSON wrapper if present
-        if (errorMsg.startsWith('500:')) {
-          errorMsg = errorMsg.replace('500: ', '');
-        }
-        
-        // Check for quota error specifically
-        if (errorMsg.toLowerCase().includes('quota') || errorMsg.includes('429') || data.error === 'daily_limit_reached') {
+        // Handle object-style errors from engine
+        const isLimitError = 
+          (typeof errorMsg === 'object' && errorMsg?.error === 'daily_limit_reached') ||
+          (typeof errorMsg === 'string' && (errorMsg.toLowerCase().includes('quota') || errorMsg.includes('429')));
+
+        if (isLimitError) {
           setRenderStatus('error');
           setErrorMessage(
-            '⚠️ API quota exhausted. To fix this:\n\n' +
+            '⚠️ Daily free limit reached. To fix this:\n\n' +
             '• Add your own Groq API key in Settings (it\'s free!)\n' +
             '• Or wait — free tier resets daily\n\n' +
             'Tip: A free Groq key gives you unlimited generations.'
           );
           return;
         }
-  
+
+        const displayMsg = typeof errorMsg === 'object' ? (errorMsg.message || JSON.stringify(errorMsg)) : (errorMsg || 'Generation failed');
         setRenderStatus('error');
-        setErrorMessage(errorMsg);
+        setErrorMessage(displayMsg.startsWith('500:') ? displayMsg.replace('500: ', '') : displayMsg);
         return;
       }
   
@@ -210,6 +225,7 @@ export default function Home() {
       if (data.remaining_today !== undefined) setRemainingToday(data.remaining_today);
       if (data.using_own_key !== undefined) setUsingOwnKey(data.using_own_key);
       
+      fetchPoolStatus();
       setRenderStatus('idle');
   
     } catch (err: any) {
@@ -361,6 +377,13 @@ export default function Home() {
                     <Zap size={8} className="fill-green-500/60" />
                     ⚡ Unlimited generations active
                   </p>
+                )}
+                {poolStatus && !usingOwnKey && (
+                  <div className="flex items-center gap-2 text-[10px] text-white/30 mt-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400/60 inline-block" />
+                    Using {poolStatus.current_provider} 
+                    · {poolStatus.uses_remaining} uses left before rotation
+                  </div>
                 )}
               </div>
             </div>
