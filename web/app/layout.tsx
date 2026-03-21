@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
-import { DM_Sans, Sora } from "next/font/google";
+import { DM_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
   subsets: ["latin"],
+  weight: ['400', '500'],
 });
 
-const sora = Sora({
-  variable: "--font-sora",
+const jetbrains = JetBrains_Mono({
+  variable: "--font-jetbrains",
   subsets: ["latin"],
+  weight: ['400'],
 });
 
 export const metadata: Metadata = {
@@ -25,7 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en" data-theme="dark">
       <body
-        className={`${dmSans.variable} ${sora.variable} antialiased`}
+        className={`${dmSans.variable} ${jetbrains.variable} antialiased font-sans`}
       >
         {children}
       </body>

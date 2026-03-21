@@ -1,78 +1,52 @@
-import os
-import glob
-import subprocess
-import tempfile
-import re
-import hashlib
-from typing import Optional
+import base64, glob, hashlib, os, re, subprocess, tempfile
+from pathlib import Path
 
-def find_output_file(output_dir: str, scene_name: str, ext: str = "mp4") -> Optional[str]:
-    """Manim nests output: media/videos/tmpXXX/480p15/SceneName.mp4"""
-    pattern = os.path.join(output_dir, "**", f"{scene_name}*.{ext}")
-    matches = glob.glob(pattern, recursive=True)
-    if matches:
-        # Return the most recently created file
-        return max(matches, key=os.path.getctime)
-    return None
+OUTPUTS_DIR = Path(__file__).parent.parent / "outputs"
+OUTPUTS_DIR.mkdir(exist_ok=True)
 
-def render_preview(code: str) -> str:
-    """
-    Writes the code to a persistent file named by hash, runs manim, 
-    and returns the absolute path to the produced video.
-    """
-    # 1. Parse scene name
+def render_preview(code: str) -> dict:
+    code = code.strip()
     match = re.search(r'class\s+(\w+)\s*\(', code)
-    scene_name = match.group(1) if match else "Animation"
-    
-    # 2. Setup persistent media cache
-    MEDIA_CACHE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "media_cache"))
-    os.makedirs(MEDIA_CACHE, exist_ok=True)
+    if not match:
+        raise ValueError("No Scene class found in code")
+    class_name = match.group(1)
 
-    # 3. Use persistent file named by code hash
-    code_hash = hashlib.md5(code.encode()).hexdigest()[:12]
-    code_file = os.path.join(MEDIA_CACHE, f"scene_{code_hash}.py")
-    with open(code_file, "w", encoding="utf-8") as f:
-        f.write(code)
+    # Use a fresh temp dir every preview so state never bleeds between tasks
+    with tempfile.TemporaryDirectory() as tmpdir:
+        code_file = os.path.join(tmpdir, "scene.py")
+        with open(code_file, "w", encoding="utf-8") as f:
+            f.write(code)
 
-    try:
-        # 4. Run manim with -ql (low quality) and caching enabled
         cmd = [
             "manim", "-ql",
             "--format", "mp4",
-            "--media_dir", MEDIA_CACHE,
-            code_file, scene_name,
+            "--media_dir", tmpdir,
             "--progress_bar", "none",
-            "--disable_caching", "False"
+            code_file,
+            class_name,
         ]
-        
-        print(f"[preview_renderer] Executing: {' '.join(cmd)}")
-        
-        # 5. Wait for process with 60s timeout
-        result = subprocess.run(
-            cmd, 
-            capture_output=True, 
-            text=True, 
-            timeout=60,
-            check=True
-        )
-        
-        # 6. Search for the output file in MEDIA_CACHE
-        video_path = find_output_file(MEDIA_CACHE, scene_name)
-        
-        if not video_path or not os.path.exists(video_path):
-            error_msg = f"Video file not found after rendering. Cache dir: {MEDIA_CACHE}. Scene: {scene_name}"
-            print(f"[preview_renderer] Error: {error_msg}")
-            print(f"[preview_renderer] Stdout: {result.stdout}")
-            print(f"[preview_renderer] Stderr: {result.stderr}")
-            raise RuntimeError(error_msg)
-            
-        return os.path.abspath(video_path)
 
-    except subprocess.TimeoutExpired:
-        print("[preview_renderer] Timeout expired (60s)")
-        raise RuntimeError("Preview rendering timed out (60s)")
-    except subprocess.CalledProcessError as e:
-        print(f"[preview_renderer] Manim failed with exit code {e.returncode}")
-        print(f"[preview_renderer] Stdout: {e.stdout}")
-        print(f"[preview_renderer] Stderr: {e.stderr}")
-        raise RuntimeError(f"Manim rendering failed: {e.stderr}")
+        result = subprocess.run(
+            cmd, cwd=tmpdir,
+            capture_output=True, text=True, timeout=120,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr[-3000:])
+
+        matches = glob.glob(os.path.join(tmpdir, "**", "*.mp4"), recursive=True)
+        if not matches:
+            raise RuntimeError(
+                f"No output file found.\nSTDOUT:{result.stdout[-1000:]}\nSTDERR:{result.stderr[-1000:]}"
+            )
+
+        video_path = max(matches, key=os.path.getctime)
+        with open(video_path, "rb") as f:
+            video_bytes = f.read()
+
+        return {
+            "video": base64.b64encode(video_bytes).decode(),
+            "mimeType": "video/mp4",
+            "className": class_name,
+            "size": len(video_bytes),
+        }

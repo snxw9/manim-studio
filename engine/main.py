@@ -12,6 +12,7 @@ import re
 import subprocess
 import tempfile
 import shutil
+import asyncio
 from collections import defaultdict
 from datetime import date
 from dotenv import load_dotenv
@@ -37,9 +38,9 @@ app.add_middleware(
 )
 
 # Ensure outputs directory exists and mount it
-OUTPUTS_DIR = os.path.abspath(os.getenv("MANIM_OUTPUT_DIR", "./outputs"))
-os.makedirs(OUTPUTS_DIR, exist_ok=True)
-app.mount("/outputs", StaticFiles(directory=OUTPUTS_DIR), name="outputs")
+OUTPUT_DIR_PATH = os.path.abspath(os.getenv("MANIM_OUTPUT_DIR", "./outputs"))
+os.makedirs(OUTPUT_DIR_PATH, exist_ok=True)
+app.mount("/outputs", StaticFiles(directory=OUTPUT_DIR_PATH), name="outputs")
 
 # Persistent media cache for LaTeX and partial renders
 MEDIA_CACHE = os.path.abspath(os.path.join(os.path.dirname(__file__), "media_cache"))
@@ -125,13 +126,18 @@ async def health():
 
 @app.post("/generate")
 async def generate_code(request: GenerateRequest, http_request: Request):
+    print(f"[generate] prompt='{request.prompt[:80]}' keys={list((request.user_keys or {}).keys())}")
+    
+    if not request.prompt.strip():
+        raise HTTPException(status_code=400, detail="Prompt is empty")
+    
     try:
-        user_keys = request.user_keys or {}
-        has_any_user_key = any(val and val.strip() for val in user_keys.values())
-        
         device_id = get_device_id(http_request)
         env_allowed, remaining = check_rate_limit(device_id)
         
+        user_keys = request.user_keys or {}
+        has_any_user_key = any(val and val.strip() for val in user_keys.values())
+
         if not env_allowed and not has_any_user_key:
             raise HTTPException(status_code=429, detail={
                 "error": "daily_limit_reached",
@@ -139,14 +145,19 @@ async def generate_code(request: GenerateRequest, http_request: Request):
                 "fix": "Add your own API key in Settings for unlimited use.",
                 "reset": "Resets at midnight."
             })
+
+        from ai.prompt_builder import build_prompt
+        full_prompt = build_prompt(request.prompt, request.template)
         
         tier = select_tier(request.prompt)
         result = await generate_with_fallback(
-            request.prompt, 
+            full_prompt, 
             tier, 
             user_keys, 
             allow_env_fallback=env_allowed
         )
+        
+        print(f"[generate] result keys: {list(result.keys())}")
         
         if "error" in result and "code" not in result:
             if "Free limit reached" in result["error"]:
@@ -163,7 +174,7 @@ async def generate_code(request: GenerateRequest, http_request: Request):
             remaining -= 1
 
         return {
-            "code": result["code"],
+            "code": result.get("code", ""),
             "provider": result.get("provider"),
             "model": result.get("model"),
             "tier": tier,
@@ -174,82 +185,23 @@ async def generate_code(request: GenerateRequest, http_request: Request):
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[generate] exception: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/preview")
 async def preview(request: PreviewRequest):
-    code = request.code.strip()
-    if not code:
+    if not request.code.strip():
         raise HTTPException(status_code=400, detail="No code provided")
-
-    # Extract class name
-    match = re.search(r'class\s+(\w+)\s*\(', code)
-    if not match:
-        raise HTTPException(status_code=400, detail="No Scene class found in code")
-    class_name = match.group(1)
-
-    # Use persistent file named by code hash
-    code_hash = hashlib.md5(code.encode()).hexdigest()[:12]
-    code_file = os.path.join(MEDIA_CACHE, f"scene_{code_hash}.py")
-    with open(code_file, "w", encoding="utf-8") as f:
-        f.write(code)
-
-    # Run manim
-    cmd = [
-        "manim", "-ql",
-        "--format", "mp4",
-        "--media_dir", MEDIA_CACHE,
-        "--progress_bar", "none",
-        "--disable_caching", "False",
-        code_file,
-        class_name,
-    ]
-
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=90,
-        )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=408, detail="Preview render timed out")
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=500,
-            detail="manim not found. Is it installed in the virtual environment?"
-        )
-
-    if result.returncode != 0:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Manim error:\n{result.stderr[-2000:]}"
-        )
-
-    # Find output file in MEDIA_CACHE
-    pattern = os.path.join(MEDIA_CACHE, "**", f"{class_name}.mp4")
-    matches = glob.glob(pattern, recursive=True)
-
-    if not matches:
-        pattern2 = os.path.join(MEDIA_CACHE, "**", "*.mp4")
-        matches = glob.glob(pattern2, recursive=True)
-
-    if not matches:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Render completed but no output file found.\nStdout: {result.stdout[-1000:]}\nStderr: {result.stderr[-1000:]}"
-        )
-
-    video_path = max(matches, key=os.path.getctime)
-    with open(video_path, "rb") as f:
-        video_bytes = f.read()
-
-    return {
-        "video": base64.b64encode(video_bytes).decode(),
-        "mimeType": "video/mp4",
-        "className": class_name,
-        "size": len(video_bytes),
-    }
+        result = await asyncio.to_thread(render_preview, request.code)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        print(f"[preview] exception: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/render")
 async def render_code(request: RenderRequest):
@@ -305,7 +257,7 @@ async def render_code(request: RenderRequest):
 
     orig_path = max(matches, key=os.path.getctime)
     filename = f"{class_name}_{request.quality}.{request.format}"
-    final_path = os.path.join(OUTPUTS_DIR, filename)
+    final_path = os.path.join(OUTPUT_DIR_PATH, filename)
     
     shutil.copy2(orig_path, final_path)
 
@@ -318,7 +270,7 @@ async def render_code(request: RenderRequest):
 @app.post("/cleanup")
 async def cleanup(request: CleanupRequest):
     try:
-        cleanup_previews(request.scene_name, OUTPUTS_DIR)
+        cleanup_previews(request.scene_name, OUTPUT_DIR_PATH)
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,44 +1,50 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 
-const ENGINE_URL = 'http://127.0.0.1:8000';
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const { prompt, template, userKeys } = body;
 
-export async function POST(req: Request) {
+  if (!prompt?.trim()) {
+    return NextResponse.json({ error: 'Prompt is empty' }, { status: 400 });
+  }
+
   try {
-    const { prompt, template, user_keys } = await req.json();
-
-    const response = await fetch(`${ENGINE_URL}/generate`, {
+    const engineRes = await fetch('http://localhost:8000/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        prompt, 
-        template: template || 'none',
-        user_keys: user_keys || {}
+      body: JSON.stringify({
+        prompt,
+        template: template || null,
+        user_keys: userKeys || {},
       }),
+      signal: AbortSignal.timeout(120000),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      return NextResponse.json(
-        { error: errorData.detail || 'Generation failed' }, 
-        { status: response.status }
-      );
+    const data = await engineRes.json();
+    console.log('[generate route] engine status:', engineRes.status, 'data:', JSON.stringify(data).slice(0, 200));
+
+    if (!engineRes.ok) {
+      return NextResponse.json({
+        error: data.detail || data.error || `Engine error ${engineRes.status}`,
+      }, { status: engineRes.status });
     }
 
-    const data = await response.json();
+    if (!data.code) {
+      return NextResponse.json({
+        error: 'Engine returned no code. Check engine logs.',
+        detail: data,
+      }, { status: 500 });
+    }
+
+    return NextResponse.json(data);
+
+  } catch (err: any) {
+    console.error('[generate route] error:', err);
+    const offline = err.message?.includes('ECONNREFUSED');
     return NextResponse.json({
-      code: data.code,
-      suggestions: data.suggestions || [
-        'Add a zooming camera effect',
-        'Change the colors to be vibrant',
-        'Add math formulas describing the shapes'
-      ],
-      provider: data.provider,
-      model: data.model,
-      remaining_today: data.remaining_today,
-      using_own_key: data.using_own_key
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: message }, { status: 500 });
+      error: offline
+        ? 'Engine is offline — run: cd engine && uvicorn main:app --reload --port 8000'
+        : `Generate failed: ${err.message}`,
+    }, { status: 503 });
   }
 }

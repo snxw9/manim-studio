@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useStore } from '@/lib/store';
-import { Topbar } from '@/components/ui/Topbar';
-import { LeftPanel } from '@/components/ui/LeftPanel';
-import { MainCanvas } from '@/components/ui/MainCanvas';
-import { RightPanel } from '@/components/ui/RightPanel';
-import { BottomBar } from '@/components/ui/BottomBar';
+import Topbar from '@/components/ui/Topbar';
+import Sidebar from '@/components/ui/Sidebar';
+import MainArea from '@/components/ui/MainArea';
+import RightPanel from '@/components/ui/RightPanel';
+import StatusBar from '@/components/ui/StatusBar';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 export default function Home() {
@@ -16,8 +16,6 @@ export default function Home() {
     activeTab,
     setActiveTab,
   } = useStore();
-
-  const [isSidebarOpen, setSidebarOpen] = useState(true);
 
   const checkEngine = useCallback(async () => {
     try {
@@ -38,29 +36,25 @@ export default function Home() {
   useEffect(() => {
     const theme = localStorage.getItem('theme') || 'dark';
     document.documentElement.setAttribute('data-theme', theme);
-    const sidebarState = localStorage.getItem('sidebarOpen');
-    if (sidebarState !== null) {
-      setSidebarOpen(sidebarState === 'true');
-    }
   }, []);
-
-  const toggleSidebar = () => {
-    const newState = !isSidebarOpen;
-    setSidebarOpen(newState);
-    localStorage.setItem('sidebarOpen', String(newState));
-  };
 
   const handleGenerateCommand = () => {
     if (activeTab !== 'prompt') setActiveTab('prompt');
-    // Actual generate logic is in the Generate button in MainCanvas
-    const genBtn = document.querySelector('[data-action="generate"]') as HTMLButtonElement | null;
-    genBtn?.click();
+    // Using a more reliable way to find the button
+    setTimeout(() => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const genBtn = buttons.find(b => b.textContent === 'Generate');
+      genBtn?.click();
+    }, 0);
   };
 
   const handleRenderCommand = () => {
     if (activeTab !== 'code') setActiveTab('code');
-    const renderBtn = document.querySelector('[data-action="render"]') as HTMLButtonElement | null;
-    renderBtn?.click();
+    setTimeout(() => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const renderBtn = buttons.find(b => b.textContent === 'Render');
+      renderBtn?.click();
+    }, 0);
   };
 
   const handleToggleTab = () => {
@@ -82,39 +76,14 @@ export default function Home() {
   });
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--bg-base)] text-[var(--text-primary)] font-sans overflow-hidden">
-      
+    <div className="flex flex-col h-screen bg-[var(--bg)] text-[var(--text-1)] font-sans overflow-hidden">
       <Topbar />
-
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
-        <div 
-          className={`flex-shrink-0 border-r border-[var(--bg-border)] transition-all duration-0`}
-          style={{ width: isSidebarOpen ? '200px' : '0px', display: isSidebarOpen ? 'block' : 'none' }}
-        >
-          <LeftPanel />
-        </div>
-
-        {/* Sidebar Toggle Bar */}
-        <div 
-          className="w-1 flex-shrink-0 cursor-pointer hover:bg-[var(--accent)] transition-colors border-r border-[var(--bg-border)]"
-          onClick={toggleSidebar}
-          title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
-        />
-
-        {/* Main Editor */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <MainCanvas />
-        </div>
-
-        {/* Right Panel */}
-        <div className="w-[280px] flex-shrink-0 border-l border-[var(--bg-border)] bg-[var(--bg-surface)]">
-          <RightPanel />
-        </div>
+        <Sidebar />
+        <MainArea />
+        <RightPanel />
       </div>
-
-      <BottomBar />
-
+      <StatusBar />
     </div>
   );
 }
