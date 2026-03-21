@@ -1,13 +1,13 @@
 'use client';
+import { useState } from 'react';
 import { ASSETS_BY_CATEGORY, Asset } from '@/lib/assets';
 import { useStore } from '@/lib/store';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 function AssetItem({ asset }: { asset: Asset }) {
   const { generatedCode, setGeneratedCode, prompt, setPrompt } = useStore();
 
   const handleClick = () => {
-    // Append snippet to generated code if in code view,
-    // otherwise append description to prompt
     if (generatedCode) {
       setGeneratedCode(generatedCode + '\n\n        # ' + asset.description + '\n        ' + asset.snippet);
     } else {
@@ -15,46 +15,49 @@ function AssetItem({ asset }: { asset: Asset }) {
     }
   };
 
-  const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData('text/plain', asset.snippet);
-    e.dataTransfer.setData('application/asset-id', asset.id);
-  };
-
   return (
     <button
-      draggable
-      onDragStart={handleDragStart}
       onClick={handleClick}
       title={asset.description}
       className="
-        flex items-center gap-2 w-full px-2 py-1.5 rounded text-[13px]
+        flex items-center gap-2 w-full px-4 py-1.5 text-[13px]
         text-[var(--text-secondary)] hover:text-[var(--text-primary)]
-        hover:bg-[var(--bg-elevated)] transition-all cursor-grab active:cursor-grabbing
         text-left
       "
     >
-      <span className="text-[15px] w-5 text-center opacity-70">{asset.icon}</span>
+      <span className="text-[13px] w-4 text-center opacity-70">{asset.icon}</span>
       <span>{asset.label}</span>
     </button>
   );
 }
 
 export default function AssetLibrary() {
+  const [isOpen, setIsOpen] = useState(true);
+
   return (
-    <div>
-      <p className="text-[11px] uppercase tracking-widest text-[var(--text-dim)] mb-2 px-1 mt-4">
-        Assets
-      </p>
-      {Object.entries(ASSETS_BY_CATEGORY).map(([category, assets]) => (
-        <div key={category} className="mb-3">
-          <p className="text-[10px] uppercase tracking-wider text-[var(--text-dim)] opacity-60 px-2 mb-1">
-            {category}
-          </p>
-          {assets.map(asset => (
-            <AssetItem key={asset.id} asset={asset} />
+    <div className="flex flex-col border-t border-[var(--bg-border)] mt-2">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-between w-full px-3 py-2 text-[11px] uppercase tracking-widest text-[var(--text-dim)] hover:text-[var(--text-secondary)]"
+      >
+        <span>Assets</span>
+        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+      </button>
+
+      {isOpen && (
+        <div className="flex flex-col pb-4">
+          {Object.entries(ASSETS_BY_CATEGORY).map(([category, assets]) => (
+            <div key={category} className="mt-2">
+              <p className="text-[10px] uppercase tracking-wider text-[var(--text-dim)] px-4 mb-1">
+                {category}
+              </p>
+              {assets.map(asset => (
+                <AssetItem key={asset.id} asset={asset} />
+              ))}
+            </div>
           ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }

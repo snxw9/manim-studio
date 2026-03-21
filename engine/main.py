@@ -41,6 +41,10 @@ OUTPUTS_DIR = os.path.abspath(os.getenv("MANIM_OUTPUT_DIR", "./outputs"))
 os.makedirs(OUTPUTS_DIR, exist_ok=True)
 app.mount("/outputs", StaticFiles(directory=OUTPUTS_DIR), name="outputs")
 
+# Persistent media cache for LaTeX and partial renders
+MEDIA_CACHE = os.path.abspath(os.path.join(os.path.dirname(__file__), "media_cache"))
+os.makedirs(MEDIA_CACHE, exist_ok=True)
+
 # In-memory store: device_id -> {date, count}
 _usage: dict[str, dict] = defaultdict(lambda: {"date": None, "count": 0})
 
@@ -184,68 +188,68 @@ async def preview(request: PreviewRequest):
         raise HTTPException(status_code=400, detail="No Scene class found in code")
     class_name = match.group(1)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Write code to temp file
-        code_file = os.path.join(tmpdir, "scene.py")
-        with open(code_file, "w", encoding="utf-8") as f:
-            f.write(code)
+    # Use persistent file named by code hash
+    code_hash = hashlib.md5(code.encode()).hexdigest()[:12]
+    code_file = os.path.join(MEDIA_CACHE, f"scene_{code_hash}.py")
+    with open(code_file, "w", encoding="utf-8") as f:
+        f.write(code)
 
-        # Run manim
-        cmd = [
-            "manim", "-ql",
-            "--format", "mp4",
-            "--media_dir", tmpdir,
-            "--disable_caching",
-            code_file,
-            class_name,
-        ]
+    # Run manim
+    cmd = [
+        "manim", "-ql",
+        "--format", "mp4",
+        "--media_dir", MEDIA_CACHE,
+        "--progress_bar", "none",
+        "--disable_caching", "False",
+        code_file,
+        class_name,
+    ]
 
-        try:
-            result = subprocess.run(
-                cmd,
-                cwd=tmpdir,
-                capture_output=True,
-                text=True,
-                timeout=90,
-            )
-        except subprocess.TimeoutExpired:
-            raise HTTPException(status_code=408, detail="Preview render timed out")
-        except FileNotFoundError:
-            raise HTTPException(
-                status_code=500,
-                detail="manim not found. Is it installed in the virtual environment?"
-            )
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=90,
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=408, detail="Preview render timed out")
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=500,
+            detail="manim not found. Is it installed in the virtual environment?"
+        )
 
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Manim error:\n{result.stderr[-2000:]}"
-            )
+    if result.returncode != 0:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Manim error:\n{result.stderr[-2000:]}"
+        )
 
-        # Find output file
-        pattern = os.path.join(tmpdir, "**", f"{class_name}.mp4")
-        matches = glob.glob(pattern, recursive=True)
+    # Find output file in MEDIA_CACHE
+    pattern = os.path.join(MEDIA_CACHE, "**", f"{class_name}.mp4")
+    matches = glob.glob(pattern, recursive=True)
 
-        if not matches:
-            pattern2 = os.path.join(tmpdir, "**", "*.mp4")
-            matches = glob.glob(pattern2, recursive=True)
+    if not matches:
+        pattern2 = os.path.join(MEDIA_CACHE, "**", "*.mp4")
+        matches = glob.glob(pattern2, recursive=True)
 
-        if not matches:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Render completed but no output file found.\nStdout: {result.stdout[-1000:]}\nStderr: {result.stderr[-1000:]}"
-            )
+    if not matches:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Render completed but no output file found.\nStdout: {result.stdout[-1000:]}\nStderr: {result.stderr[-1000:]}"
+        )
 
-        video_path = max(matches, key=os.path.getctime)
-        with open(video_path, "rb") as f:
-            video_bytes = f.read()
+    video_path = max(matches, key=os.path.getctime)
+    with open(video_path, "rb") as f:
+        video_bytes = f.read()
 
-        return {
-            "video": base64.b64encode(video_bytes).decode(),
-            "mimeType": "video/mp4",
-            "className": class_name,
-            "size": len(video_bytes),
-        }
+    return {
+        "video": base64.b64encode(video_bytes).decode(),
+        "mimeType": "video/mp4",
+        "className": class_name,
+        "size": len(video_bytes),
+    }
 
 @app.post("/render")
 async def render_code(request: RenderRequest):
@@ -271,43 +275,45 @@ async def render_code(request: RenderRequest):
     # Format
     fmt = request.format if request.format != "mov" else "mp4"
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        code_file = os.path.join(tmpdir, "scene.py")
-        with open(code_file, "w", encoding="utf-8") as f:
-            f.write(code)
+    # Use persistent file named by code hash
+    code_hash = hashlib.md5(code.encode()).hexdigest()[:12]
+    code_file = os.path.join(MEDIA_CACHE, f"scene_{code_hash}.py")
+    with open(code_file, "w", encoding="utf-8") as f:
+        f.write(code)
 
-        cmd = [
-            "manim", q_flag,
-            "--format", fmt,
-            "--media_dir", tmpdir,
-            code_file,
-            class_name,
-        ]
+    cmd = [
+        "manim", q_flag,
+        "--format", fmt,
+        "--media_dir", MEDIA_CACHE,
+        "--progress_bar", "none",
+        code_file,
+        class_name,
+    ]
 
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-        if result.returncode != 0:
-            raise HTTPException(status_code=422, detail=f"Manim error: {result.stderr[-1000:]}")
+    if result.returncode != 0:
+        raise HTTPException(status_code=422, detail=f"Manim error: {result.stderr[-1000:]}")
 
-        pattern = os.path.join(tmpdir, "**", f"*.{fmt}")
-        matches = glob.glob(pattern, recursive=True)
-        if not matches:
-            raise HTTPException(status_code=500, detail="Output file not found")
+    pattern = os.path.join(MEDIA_CACHE, "**", f"*.{fmt}")
+    matches = glob.glob(pattern, recursive=True)
+    if not matches:
+        raise HTTPException(status_code=500, detail="Output file not found")
 
-        orig_path = max(matches, key=os.path.getctime)
-        filename = f"{class_name}_{request.quality}.{request.format}"
-        final_path = os.path.join(OUTPUTS_DIR, filename)
-        
-        shutil.copy2(orig_path, final_path)
+    orig_path = max(matches, key=os.path.getctime)
+    filename = f"{class_name}_{request.quality}.{request.format}"
+    final_path = os.path.join(OUTPUTS_DIR, filename)
+    
+    shutil.copy2(orig_path, final_path)
 
-        return {
-            "videoUrl": f"/outputs/{filename}",
-            "filename": filename,
-            "size": os.path.getsize(final_path)
-        }
+    return {
+        "videoUrl": f"/outputs/{filename}",
+        "filename": filename,
+        "size": os.path.getsize(final_path)
+    }
 
 @app.post("/cleanup")
 async def cleanup(request: CleanupRequest):

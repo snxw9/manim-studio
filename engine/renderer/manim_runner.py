@@ -5,6 +5,7 @@ import re
 import datetime
 import glob
 import shutil
+import hashlib
 
 def cleanup_previews(scene_name: str, output_dir: str):
     """Delete all preview files for a given scene name."""
@@ -28,10 +29,15 @@ def run_manim(code: str, preview: bool = False, quality: str = "1080p", fmt: str
     if not preview:
         cleanup_previews(scene_name, output_dir)
 
-    # 3. Create a temporary file to hold the code
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".py", mode="w", encoding="utf-8") as tmp:
-        tmp.write(code)
-        tmp_path = tmp.name
+    # 3. Handle persistent code file named by code hash
+    MEDIA_CACHE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "media_cache"))
+    os.makedirs(MEDIA_CACHE, exist_ok=True)
+    
+    code_hash = hashlib.md5(code.encode()).hexdigest()[:12]
+    code_file = os.path.join(MEDIA_CACHE, f"scene_{code_hash}.py")
+    with open(code_file, "w", encoding="utf-8") as f:
+        f.write(code)
+    tmp_path = code_file
         
     # 4. Map quality to manim flags
     quality_map = {
@@ -57,12 +63,12 @@ def run_manim(code: str, preview: bool = False, quality: str = "1080p", fmt: str
         manim_fmt = fmt if fmt in ["mp4", "gif"] else "mp4"
         
         cmd = [
-            "manim", tmp_path, scene_name,
-            quality_flag,
-            "--media_dir", output_dir,
+            "manim", quality_flag,
             "--format", manim_fmt,
-            "--output_file", output_filename,
-            "--progress_bar", "none"
+            "--media_dir", MEDIA_CACHE,
+            "--progress_bar", "none",
+            tmp_path,
+            scene_name,
         ]
         
         print(f"Executing: {' '.join(cmd)}")
@@ -117,6 +123,3 @@ def run_manim(code: str, preview: bool = False, quality: str = "1080p", fmt: str
         print(f"Manim Error Stdout: {e.stdout}")
         print(f"Manim Error Stderr: {e.stderr}")
         raise RuntimeError(f"Manim rendering failed:\n{e.stderr}")
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)

@@ -1,41 +1,36 @@
 import { useStore } from '@/lib/store';
 
 export function BottomBar() {
-  const { engineStatus, lastProvider, lastModel, renderStatus, errorMessage } = useStore();
+  const { engineStatus, lastProvider, lastModel } = useStore();
 
   return (
-    <footer className="h-8 bg-[var(--bg-surface)] border-t border-[var(--bg-border)] flex items-center justify-between px-4 shrink-0 relative z-50">
+    <footer className="h-[28px] bg-[var(--bg-surface)] border-t border-[var(--bg-border)] flex items-center justify-between px-4 shrink-0 relative z-50">
       
-      {/* Engine Status */}
+      {/* Left: Engine Status */}
       <div className="flex items-center gap-2">
-        <span className={`w-1.5 h-1.5 rounded-full ${
-          engineStatus === 'online' ? 'bg-green-500' : 
-          engineStatus === 'offline' ? 'bg-red-500' : 
-          'bg-gray-500 animate-pulse'
+        <span className={`w-[6px] h-[6px] rounded-full ${
+          engineStatus === 'online' ? 'bg-[var(--green)]' : 
+          engineStatus === 'offline' ? 'bg-[var(--red)]' : 
+          'bg-[var(--yellow)]'
         }`} />
-        <span className="text-[11px] text-[var(--text-dim)]">
-          {engineStatus === 'online' ? 'Engine online' : 
-           engineStatus === 'offline' ? 'Engine offline' : 
-           'Checking...'}
+        <span className="text-[11px] text-[var(--text-dim)] lowercase">
+          {engineStatus || 'checking...'}
         </span>
       </div>
 
-      {/* Generation Info */}
-      <div className="flex items-center gap-2">
-        {errorMessage && (
-          <span className="text-[11px] text-red-400 max-w-[400px] truncate">{errorMessage}</span>
-        )}
-        {!errorMessage && lastProvider && (
+      {/* Center: Model Info */}
+      <div className="flex items-center">
+        {lastProvider && (
           <span className="text-[11px] text-[var(--text-dim)]">
             {lastProvider} · {lastModel}
           </span>
         )}
       </div>
 
-      {/* Shortcuts */}
-      <div className="flex items-center gap-3">
-        <span className="text-[11px] text-[var(--text-dim)]">⌘K Generate</span>
-        <span className="text-[11px] text-[var(--text-dim)]">⌘↵ Render</span>
+      {/* Right: Shortcuts */}
+      <div className="flex items-center gap-4">
+        <span className="text-[11px] text-[var(--text-dim)]">Ctrl+K Generate</span>
+        <span className="text-[11px] text-[var(--text-dim)]">Ctrl+Enter Render</span>
       </div>
 
     </footer>

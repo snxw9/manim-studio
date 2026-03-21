@@ -19,7 +19,6 @@
     "clsx": "^2.1.1",
     "dexie": "^4.3.0",
     "file-saver": "^2.0.5",
-    "framer-motion": "^12.35.2",
     "jszip": "^3.10.1",
     "lucide-react": "^0.577.0",
     "monaco-editor": "^0.55.1",

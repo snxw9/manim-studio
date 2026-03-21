@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useStore } from '@/lib/store';
-import { DndContext, DragEndEvent } from '@dnd-kit/core';
 import { Topbar } from '@/components/ui/Topbar';
 import { LeftPanel } from '@/components/ui/LeftPanel';
 import { MainCanvas } from '@/components/ui/MainCanvas';
@@ -13,65 +12,54 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 export default function Home() {
   const { 
     setEngineStatus, 
-    prompt, 
-    setPrompt, 
     engineUrl,
     activeTab,
     setActiveTab,
-    renderStatus,
-    generatedCode
   } = useStore();
+
+  const [isSidebarOpen, setSidebarOpen] = useState(true);
 
   const checkEngine = useCallback(async () => {
     try {
-      const res = await fetch('/api/health', { cache: 'no-store' });
+      const res = await fetch(`${engineUrl}/health`, { cache: 'no-store' });
       const data = await res.json();
-      setEngineStatus(data.online ? 'online' : 'offline');
-      return data.online;
+      setEngineStatus(data.status === 'ok' ? 'online' : 'offline');
     } catch {
       setEngineStatus('offline');
-      return false;
     }
-  }, [setEngineStatus]);
+  }, [engineUrl, setEngineStatus]);
 
   useEffect(() => {
-    setEngineStatus('checking' as any);
     checkEngine();
     const interval = setInterval(checkEngine, 5000);
     return () => clearInterval(interval);
-  }, [checkEngine, setEngineStatus]);
+  }, [checkEngine]);
 
   useEffect(() => {
-    const theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-    useStore.getState().setTheme(theme as any);
+    const theme = localStorage.getItem('theme') || 'dark';
     document.documentElement.setAttribute('data-theme', theme);
+    const sidebarState = localStorage.getItem('sidebarOpen');
+    if (sidebarState !== null) {
+      setSidebarOpen(sidebarState === 'true');
+    }
   }, []);
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { over, active } = event;
-    if (over && over.id === 'canvas-droppable') {
-      const assetData = active.data.current;
-      if (assetData && typeof assetData === 'object' && 'label' in assetData && 'type' in assetData) {
-        setPrompt(prompt + (prompt ? ' ' : '') + `Include a ${assetData.type}: ${assetData.label}.`);
-      }
-    }
+  const toggleSidebar = () => {
+    const newState = !isSidebarOpen;
+    setSidebarOpen(newState);
+    localStorage.setItem('sidebarOpen', String(newState));
   };
 
   const handleGenerateCommand = () => {
-    // We would trigger generate here, but the actual logic is inside MainCanvas.
-    // For a cleaner architecture, generate logic could be moved up or to the store.
-    // For now, we'll just focus the prompt if it's not active.
     if (activeTab !== 'prompt') setActiveTab('prompt');
-    const btn = document.querySelector('button:has(.animate-shimmer)') as HTMLButtonElement | null;
-    if (!btn) {
-       const genBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Generate'));
-       genBtn?.click();
-    }
+    // Actual generate logic is in the Generate button in MainCanvas
+    const genBtn = document.querySelector('[data-action="generate"]') as HTMLButtonElement | null;
+    genBtn?.click();
   };
 
   const handleRenderCommand = () => {
     if (activeTab !== 'code') setActiveTab('code');
-    const renderBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Render') && !b.disabled);
+    const renderBtn = document.querySelector('[data-action="render"]') as HTMLButtonElement | null;
     renderBtn?.click();
   };
 
@@ -94,20 +82,39 @@ export default function Home() {
   });
 
   return (
-    <DndContext onDragEnd={handleDragEnd}>
-      <div className="flex flex-col h-screen bg-[var(--bg-base)] text-[var(--text-primary)] font-sans overflow-hidden">
-        
-        <Topbar />
+    <div className="flex flex-col h-screen bg-[var(--bg-base)] text-[var(--text-primary)] font-sans overflow-hidden">
+      
+      <Topbar />
 
-        <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar */}
+        <div 
+          className={`flex-shrink-0 border-r border-[var(--bg-border)] transition-all duration-0`}
+          style={{ width: isSidebarOpen ? '200px' : '0px', display: isSidebarOpen ? 'block' : 'none' }}
+        >
           <LeftPanel />
-          <MainCanvas />
-          <RightPanel />
         </div>
 
-        <BottomBar />
+        {/* Sidebar Toggle Bar */}
+        <div 
+          className="w-1 flex-shrink-0 cursor-pointer hover:bg-[var(--accent)] transition-colors border-r border-[var(--bg-border)]"
+          onClick={toggleSidebar}
+          title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+        />
 
+        {/* Main Editor */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <MainCanvas />
+        </div>
+
+        {/* Right Panel */}
+        <div className="w-[280px] flex-shrink-0 border-l border-[var(--bg-border)] bg-[var(--bg-surface)]">
+          <RightPanel />
+        </div>
       </div>
-    </DndContext>
+
+      <BottomBar />
+
+    </div>
   );
 }
