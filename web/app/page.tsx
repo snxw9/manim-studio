@@ -861,28 +861,45 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: generatedCode, quality, format }),
       });
-      const data = await res.json();
 
-      if (!res.ok) {
-        setRenderStatus('error');
-        setErrorMessage(data.error || data.detail || 'Render failed');
-        return;
+      if (!res.body) throw new Error('No response body');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const lines = decoder.decode(value).split('\n').filter(Boolean);
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+
+            if (data.status === 'error') {
+              setRenderStatus('error');
+              setErrorMessage(data.error);
+              return;
+            }
+
+            if (data.status === 'done') {
+              setRenderTime((Date.now() - t0) / 1000);
+
+              if (data.video) {
+                const bytes = atob(data.video);
+                const arr = new Uint8Array(bytes.length);
+                for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+                const blob = new Blob([arr], { type: 'video/mp4' });
+                setVideoUrl(URL.createObjectURL(blob));
+              } else if (data.videoUrl) {
+                setVideoUrl(`http://localhost:8000${data.videoUrl}`);
+              }
+
+              setRenderStatus('done');
+            }
+          } catch {}
+        }
       }
-
-      setRenderTime((Date.now() - t0) / 1000);
-
-      // Handle base64 video
-      if (data.video) {
-        const bytes = atob(data.video);
-        const arr = new Uint8Array(bytes.length);
-        for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-        const blob = new Blob([arr], { type: 'video/mp4' });
-        setVideoUrl(URL.createObjectURL(blob));
-      } else if (data.videoUrl) {
-        setVideoUrl(`http://localhost:8000${data.videoUrl}`);
-      }
-
-      setRenderStatus('done');
     } catch (err: any) {
       setRenderStatus('error');
       setErrorMessage(`Render error: ${err.message}`);

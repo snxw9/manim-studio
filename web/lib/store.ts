@@ -58,7 +58,7 @@ export const useStore = create<Store>((set) => ({
   lastModel: null,
   renderTime: null,
   engineOnline: false,
-  quality: '1080p',
+  quality: '720p',
   format: 'mp4',
   userKeys: {},
   theme: 'dark',

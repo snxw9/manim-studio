@@ -6,6 +6,25 @@ import datetime
 import glob
 import shutil
 import hashlib
+import ast
+from pathlib import Path
+
+MEDIA_DIR = Path(__file__).parent.parent / "media_cache"
+
+def pre_validate(code: str) -> str | None:
+    """Returns error string or None if valid."""
+    try:
+        ast.parse(code)
+    except SyntaxError as e:
+        return f"Syntax error at line {e.lineno}: {e.msg}"
+    
+    if 'def construct' not in code:
+        return "Missing construct(self) method"
+    
+    if not re.search(r'class\s+\w+\s*\(', code):
+        return "No Scene class found"
+    
+    return None  # valid
 
 def cleanup_previews(scene_name: str, output_dir: str):
     """Delete all preview files for a given scene name."""
@@ -17,7 +36,12 @@ def cleanup_previews(scene_name: str, output_dir: str):
         except Exception as e:
             print(f"Error cleaning up preview {f}: {e}")
 
-def run_manim(code: str, preview: bool = False, quality: str = "1080p", fmt: str = "mp4") -> str:
+def run_manim(code: str, preview: bool = False, quality: str = "720p", fmt: str = "mp4") -> str:
+    # Pre-validate before calling Manim
+    error = pre_validate(code)
+    if error:
+        raise ValueError(error)
+
     # 1. Parse scene name
     match = re.search(r'class\s+(\w+)\s*\(', code)
     scene_name = match.group(1) if match else "Animation"
@@ -46,8 +70,11 @@ def run_manim(code: str, preview: bool = False, quality: str = "1080p", fmt: str
         "1080p": "-qh",
         "2160p": "-qk"
     }
-    quality_flag = quality_map.get(quality, "-qh") if not preview else "-ql"
+    quality_flag = quality_map.get(quality, "-qm") if not preview else "-ql"
     
+    # FPS logic
+    fps = "60" if quality == "2160p" else "30"
+
     # 5. Define output filename
     if preview:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -59,13 +86,13 @@ def run_manim(code: str, preview: bool = False, quality: str = "1080p", fmt: str
 
     try:
         # Run manim via subprocess
-        # We use --format for mp4/gif
         manim_fmt = fmt if fmt in ["mp4", "gif"] else "mp4"
         
         cmd = [
             "manim", quality_flag,
+            "--fps", fps,
             "--format", manim_fmt,
-            "--media_dir", MEDIA_CACHE,
+            "--media_dir", str(MEDIA_DIR),
             "--progress_bar", "none",
             tmp_path,
             scene_name,
@@ -74,21 +101,18 @@ def run_manim(code: str, preview: bool = False, quality: str = "1080p", fmt: str
         print(f"Executing: {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         
-        # Manim creates nested directories by default (e.g., videos/tmp.../1080p60/output.mp4)
-        # We want to move it directly to output_dir with our specific name
-        # Let's find where manim actually put it
-        search_pattern = os.path.join(output_dir, "videos", "**", output_filename)
+        # Manim creates nested directories by default
+        search_pattern = os.path.join(str(MEDIA_DIR), "videos", "**", output_filename)
         found_files = glob.glob(search_pattern, recursive=True)
         
         if found_files:
             # Move it to the root of output_dir
-            shutil.move(found_files[0], final_output_path)
+            shutil.copy2(found_files[0], final_output_path)
             
             # Safely cleanup the empty nested directories manim creates
-            # e.g., outputs/videos/tmp_filename/1080p60/
             try:
                 parent_dir = os.path.dirname(found_files[0])
-                while parent_dir.startswith(output_dir) and parent_dir != output_dir:
+                while parent_dir.startswith(str(MEDIA_DIR)) and parent_dir != str(MEDIA_DIR):
                     if not os.listdir(parent_dir):
                         os.rmdir(parent_dir)
                         parent_dir = os.path.dirname(parent_dir)
@@ -97,7 +121,6 @@ def run_manim(code: str, preview: bool = False, quality: str = "1080p", fmt: str
             except Exception as cleanup_err:
                 print(f"Non-critical cleanup error: {cleanup_err}")
         else:
-            # Fallback check if it's already where we expect or check stdout
             if not os.path.exists(final_output_path):
                 raise RuntimeError(f"Manim finished but {output_filename} was not found. Stdout: {result.stdout}")
 
@@ -105,13 +128,11 @@ def run_manim(code: str, preview: bool = False, quality: str = "1080p", fmt: str
         if not preview and fmt in ["webm", "mov"]:
             temp_mp4 = final_output_path
             if fmt == "webm":
-                # mp4 to webm via ffmpeg
                 new_path = final_output_path.replace(".mp4", ".webm")
                 subprocess.run(["ffmpeg", "-y", "-i", temp_mp4, "-c:v", "libvpx-vp9", "-b:v", "1M", new_path], check=True)
                 os.remove(temp_mp4)
                 final_output_path = new_path
             elif fmt == "mov":
-                # mp4 to mov
                 new_path = final_output_path.replace(".mp4", ".mov")
                 subprocess.run(["ffmpeg", "-y", "-i", temp_mp4, "-codec", "copy", new_path], check=True)
                 os.remove(temp_mp4)

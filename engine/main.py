@@ -17,16 +17,38 @@ from collections import defaultdict
 from datetime import date
 from dotenv import load_dotenv
 from ai.model_router import generate_with_fallback, select_tier
-from renderer.manim_runner import run_manim, cleanup_previews
+from renderer.manim_runner import run_manim, cleanup_previews, pre_validate
 from renderer.preview_renderer import render_preview
 from renderer.code_validator import validate_manim_code
 from templates.library import get_template, list_templates
 from templates.assets import get_asset, list_assets, get_assets_by_category
 
+from pathlib import Path
+from renderer.worker_pool import get_worker_pool
+from contextlib import asynccontextmanager
+
 # Load .env from root directory
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-app = FastAPI(title="Manim Studio Engine API")
+# Persistent dirs — survive between renders
+MEDIA_DIR = Path(__file__).parent / "media_cache"
+OUTPUTS_DIR = Path(__file__).parent / "outputs"
+LATEX_CACHE = MEDIA_DIR / "Tex"
+
+MEDIA_DIR.mkdir(exist_ok=True)
+OUTPUTS_DIR.mkdir(exist_ok=True)
+LATEX_CACHE.mkdir(exist_ok=True)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start worker pool on startup
+    pool = get_worker_pool()
+    await pool.start()
+    yield
+    # Clean up on shutdown
+    await pool.stop()
+
+app = FastAPI(title="Manim Studio Engine API", lifespan=lifespan)
 
 # Add CORS headers so Next.js can reach the engine
 app.add_middleware(
@@ -82,7 +104,7 @@ class GenerateRequest(BaseModel):
 class RenderRequest(BaseModel):
     code: str
     is_preview: bool = False
-    quality: str = "1080p"
+    quality: str = "720p"
     format: str = "mp4"
 
 class PreviewRequest(BaseModel):
@@ -122,7 +144,7 @@ async def get_asset_snippet(asset_id: str):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "1.0"}
+    return {"status": "ok", "version": "1.0", "online": True}
 
 @app.post("/generate")
 async def generate_code(request: GenerateRequest, http_request: Request):
@@ -153,8 +175,7 @@ async def generate_code(request: GenerateRequest, http_request: Request):
         result = await generate_with_fallback(
             full_prompt, 
             tier, 
-            user_keys, 
-            allow_env_fallback=env_allowed
+            user_keys
         )
         
         print(f"[generate] result keys: {list(result.keys())}")
@@ -205,68 +226,31 @@ async def preview(request: PreviewRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/render")
-async def render_code(request: RenderRequest):
-    code = request.code.strip()
-    if not code:
+async def render_code(request: RenderRequest, http_request: Request):
+    if not request.code.strip():
         raise HTTPException(status_code=400, detail="No code provided")
 
-    # Extract class name
-    match = re.search(r'class\s+(\w+)\s*\(', code)
-    if not match:
-        raise HTTPException(status_code=400, detail="No Scene class found in code")
-    class_name = match.group(1)
+    # Pre-validate before sending to worker
+    error = pre_validate(request.code)
+    if error:
+        raise HTTPException(status_code=422, detail=error)
 
-    # Quality map
-    quality_map = {
-        "480p": "-ql",
-        "720p": "-qm",
-        "1080p": "-qh",
-        "2160p": "-qk"
-    }
-    q_flag = quality_map.get(request.quality, "-qh")
-
-    # Format
-    fmt = request.format if request.format != "mov" else "mp4"
-
-    # Use persistent file named by code hash
-    code_hash = hashlib.md5(code.encode()).hexdigest()[:12]
-    code_file = os.path.join(MEDIA_CACHE, f"scene_{code_hash}.py")
-    with open(code_file, "w", encoding="utf-8") as f:
-        f.write(code)
-
-    cmd = [
-        "manim", q_flag,
-        "--format", fmt,
-        "--media_dir", MEDIA_CACHE,
-        "--progress_bar", "none",
-        code_file,
-        class_name,
-    ]
-
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-    if result.returncode != 0:
-        raise HTTPException(status_code=422, detail=f"Manim error: {result.stderr[-1000:]}")
-
-    pattern = os.path.join(MEDIA_CACHE, "**", f"*.{fmt}")
-    matches = glob.glob(pattern, recursive=True)
-    if not matches:
-        raise HTTPException(status_code=500, detail="Output file not found")
-
-    orig_path = max(matches, key=os.path.getctime)
-    filename = f"{class_name}_{request.quality}.{request.format}"
-    final_path = os.path.join(OUTPUT_DIR_PATH, filename)
+    fps = 60 if request.quality == "2160p" else 30
     
-    shutil.copy2(orig_path, final_path)
-
-    return {
-        "videoUrl": f"/outputs/{filename}",
-        "filename": filename,
-        "size": os.path.getsize(final_path)
+    job = {
+        "code": request.code,
+        "quality": request.quality or "720p",
+        "format": request.format or "mp4",
+        "fps": fps,
     }
+
+    pool = get_worker_pool()
+    result = await pool.render(job)
+
+    if "error" in result:
+        raise HTTPException(status_code=422, detail=result["error"])
+
+    return result
 
 @app.post("/cleanup")
 async def cleanup(request: CleanupRequest):
