@@ -567,11 +567,11 @@ function MainArea({
 
 // ─── Right panel ─────────────────────────────────────────────────
 
-function RightPanel({ onRender }: { onRender: () => void }) {
+function RightPanel({ onRender, elapsed }: { onRender: () => void, elapsed: number }) {
   const {
     generatedCode, renderStatus, errorMessage,
     videoUrl, setVideoUrl, quality, format,
-    setRenderStatus, setRenderTime
+    setRenderStatus, setRenderTime, setErrorMessage
   } = useStore();
 
   const [scenes, setScenes] = useState([{ id: '1', name: 'Scene 1', duration: 5 }]);
@@ -664,6 +664,40 @@ function RightPanel({ onRender }: { onRender: () => void }) {
         >
           {renderStatus === 'rendering' ? 'rendering...' : 'Render'}
         </button>
+
+        {renderStatus === 'rendering' && (
+          <>
+            <div style={{
+              marginTop: 8, fontSize: 10,
+              color: 'var(--t3)', textAlign: 'center',
+              letterSpacing: '0.04em',
+            }}>
+              {elapsed}s elapsed
+              {elapsed > 30 && ' — complex scene, please wait...'}
+              {elapsed > 90 && ' — this is taking longer than usual'}
+            </div>
+            <button
+              onClick={async () => {
+                await fetch('/api/render/cancel', { 
+                  method: 'POST',
+                  body: JSON.stringify({ render_id: 'default' }) 
+                });
+                setRenderStatus('idle');
+                setErrorMessage('Render cancelled');
+              }}
+              style={{
+                marginTop: 6, width: '100%',
+                padding: '5px 0', fontSize: 10,
+                color: '#ff4444', background: 'none',
+                border: '1px solid #ff4444',
+                borderRadius: 2, cursor: 'pointer',
+                fontFamily: 'inherit', letterSpacing: '0.05em',
+              }}
+            >
+              cancel render
+            </button>
+          </>
+        )}
 
         {videoUrl && (
           <button
@@ -778,7 +812,21 @@ export default function Home() {
     setVideoUrl, setLastProvider, setLastModel,
     setRenderTime, setEngineOnline,
     setTheme, resetTask,
+    renderStatus,
   } = useStore();
+
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (renderStatus === 'rendering') {
+      setElapsed(0);
+      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [renderStatus]);
 
   // Theme init
   useEffect(() => {
@@ -912,7 +960,7 @@ export default function Home() {
       <div style={S.body}>
         <Sidebar />
         <MainArea onGenerate={handleGenerate} onRender={handleRender} />
-        <RightPanel onRender={handleRender} />
+        <RightPanel onRender={handleRender} elapsed={elapsed} />
       </div>
       <StatusBar />
     </div>

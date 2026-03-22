@@ -14,6 +14,7 @@ MEDIA_DIR = Path(__file__).parent.parent / "media_cache"
 def pre_validate(code: str) -> str | None:
     """Returns error string or None if valid."""
     try:
+        import ast
         ast.parse(code)
     except SyntaxError as e:
         return f"Syntax error at line {e.lineno}: {e.msg}"
@@ -24,6 +25,17 @@ def pre_validate(code: str) -> str | None:
     if not re.search(r'class\s+\w+\s*\(', code):
         return "No Scene class found"
     
+    # Count self.wait() total duration
+    waits = re.findall(r'self\.wait\s*\(\s*([0-9.]+)', code)
+    total_wait = sum(float(w) for w in waits)
+    if total_wait > 60:
+        return f"Animation too long ({total_wait:.0f}s of wait time). Keep under 60 seconds."
+
+    # Count play calls — too many = too slow
+    play_count = len(re.findall(r'self\.play\s*\(', code))
+    if play_count > 30:
+        return f"Too many animations ({play_count} self.play calls). Keep under 30."
+
     return None  # valid
 
 def cleanup_previews(scene_name: str, output_dir: str):

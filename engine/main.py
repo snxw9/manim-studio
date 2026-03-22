@@ -110,8 +110,19 @@ class RenderRequest(BaseModel):
 class PreviewRequest(BaseModel):
     code: str
 
-class CleanupRequest(BaseModel):
-    scene_name: str
+import signal
+_active_processes: dict[str, subprocess.Popen] = {}
+
+@app.post("/render/cancel")
+async def cancel_render(request: Request):
+    body = await request.json()
+    render_id = body.get("render_id", "default")
+    proc = _active_processes.get(render_id)
+    if proc:
+        proc.kill()
+        del _active_processes[render_id]
+        return {"cancelled": True}
+    return {"cancelled": False}
 
 from ai.provider_pool import get_pool
 

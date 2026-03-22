@@ -1,0 +1,1 @@
+{"code": "from manim import *\n\nclass CircleAnimation(Scene):\n    def construct(self):\n        circle = Circle(radius=0.5, color=BLUE)\n        self.add(circle)\n        self.play(Transform(circle, Circle(radius=1, color=RED)), run_time=2)\n        self.wait()", "provider": "groq", "model": "llama-3.1-8b-instant", "source": "developer_pool"}
