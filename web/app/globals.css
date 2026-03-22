@@ -1,66 +1,89 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
 
 :root {
-  --bg:           #0d0d0d;
-  --bg-2:         #171717;
-  --bg-3:         #1f1f1f;
-  --bg-4:         #2a2a2a;
-  --border:       #2a2a2a;
-  --border-light: #333333;
-  --text-1:       #ececec;
-  --text-2:       #8e8e8e;
-  --text-3:       #555555;
-  --accent:       #d97706;
-  --accent-2:     #b45309;
-  --red:          #ef4444;
-  --green:        #22c55e;
+  /* Backgrounds */
+  --bg-0: #0c0a08;
+  --bg-1: #131109;
+  --bg-2: #1a1710;
+  --bg-3: #242018;
+  --bg-4: #2e2a20;
 
-  /* Monaco custom theme tokens */
-  --monaco-keyword: #d97706;
-  --monaco-string: #a3a3a3;
-  --monaco-comment: #525252;
-  --monaco-number: #ececec;
+  /* Borders */
+  --line: #2a2518;
+  --line-2: #3a3428;
+
+  /* Text */
+  --t1: #e8e0d0;
+  --t2: #7a7060;
+  --t3: #4a4438;
+
+  /* Accent — amber, used sparingly */
+  --a: #d4900a;
+  --a-dim: #d4900a18;
+  --a-bright: #f0a820;
+
+  /* Status */
+  --ok: #4a8a5a;
+  --err: #8a4040;
 }
 
 [data-theme="light"] {
-  --bg:           #ffffff;
-  --bg-2:         #f9f9f9;
-  --bg-3:         #f0f0f0;
-  --bg-4:         #e5e5e5;
-  --border:       #e5e5e5;
-  --border-light: #d4d4d4;
-  --text-1:       #0d0d0d;
-  --text-2:       #525252;
-  --text-3:       #a3a3a3;
+  --bg-0: #f5f2ec;
+  --bg-1: #eee9e0;
+  --bg-2: #e5dfd4;
+  --bg-3: #d8d0c4;
+  --bg-4: #c8c0b4;
+  --line: #c0b8a8;
+  --line-2: #b0a898;
+  --t1: #1a1610;
+  --t2: #6a6050;
+  --t3: #9a9080;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
-  background: var(--bg);
-  color: var(--text-1);
-  font-family: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  overflow: hidden;
-}
-
-/* Remove ALL animations except minimal transitions */
 *, *::before, *::after {
-  animation: none !important;
-  transition: color 0.15s, background-color 0.15s, border-color 0.15s, opacity 0.15s !important;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+html, body {
+  height: 100%;
+  background: var(--bg-0);
+  color: var(--t1);
+  font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: 0.01em;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: inherit;
+}
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+}
+
+textarea { resize: none; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--t3); }
 
-/* Typography Overrides */
-.font-mono { font-family: var(--font-jetbrains), monospace; }
+::selection { background: var(--a-dim); }
 
-@theme {
-  --font-sans: var(--font-dm-sans);
-  --font-mono: var(--font-jetbrains);
-}
+/* Utility */
+.mono { font-family: 'JetBrains Mono', monospace; }

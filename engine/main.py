@@ -190,9 +190,11 @@ async def generate_code(request: GenerateRequest, http_request: Request):
 
 @app.post("/preview")
 async def preview(request: PreviewRequest):
-    if not request.code.strip():
+    if not request.code or not request.code.strip():
         raise HTTPException(status_code=400, detail="No code provided")
     try:
+        import asyncio
+        from renderer.preview_renderer import render_preview
         result = await asyncio.to_thread(render_preview, request.code)
         return result
     except ValueError as e:
@@ -200,7 +202,6 @@ async def preview(request: PreviewRequest):
     except RuntimeError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
-        print(f"[preview] exception: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/render")

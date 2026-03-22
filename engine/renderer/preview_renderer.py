@@ -1,24 +1,29 @@
-import base64, glob, hashlib, os, re, subprocess, tempfile
-from pathlib import Path
+import base64
+import glob
+import os
+import re
+import subprocess
+import tempfile
 
-OUTPUTS_DIR = Path(__file__).parent.parent / "outputs"
-OUTPUTS_DIR.mkdir(exist_ok=True)
 
 def render_preview(code: str) -> dict:
     code = code.strip()
+    if not code:
+        raise ValueError("No code provided")
+
     match = re.search(r'class\s+(\w+)\s*\(', code)
     if not match:
         raise ValueError("No Scene class found in code")
     class_name = match.group(1)
 
-    # Use a fresh temp dir every preview so state never bleeds between tasks
     with tempfile.TemporaryDirectory() as tmpdir:
         code_file = os.path.join(tmpdir, "scene.py")
         with open(code_file, "w", encoding="utf-8") as f:
             f.write(code)
 
         cmd = [
-            "manim", "-ql",
+            "manim",
+            "-ql",
             "--format", "mp4",
             "--media_dir", tmpdir,
             "--progress_bar", "none",
@@ -26,18 +31,38 @@ def render_preview(code: str) -> dict:
             class_name,
         ]
 
-        result = subprocess.run(
-            cmd, cwd=tmpdir,
-            capture_output=True, text=True, timeout=120,
-        )
+        # Safety check — catch any non-string sneaking in
+        for i, item in enumerate(cmd):
+            if not isinstance(item, str):
+                raise TypeError(
+                    f"cmd[{i}] is {type(item).__name__} = {repr(item)}, must be str"
+                )
+
+        print(f"[preview] CMD: {cmd}")
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("Preview timed out")
+        except FileNotFoundError:
+            raise RuntimeError("manim not found in PATH")
 
         if result.returncode != 0:
-            raise RuntimeError(result.stderr[-3000:])
+            raise RuntimeError(f"Manim error:\n{result.stderr[-3000:]}")
 
-        matches = glob.glob(os.path.join(tmpdir, "**", "*.mp4"), recursive=True)
+        matches = glob.glob(
+            os.path.join(tmpdir, "**", "*.mp4"),
+            recursive=True,
+        )
+
         if not matches:
             raise RuntimeError(
-                f"No output file found.\nSTDOUT:{result.stdout[-1000:]}\nSTDERR:{result.stderr[-1000:]}"
+                f"No mp4 produced.\nSTDOUT:{result.stdout[-500:]}\nSTDERR:{result.stderr[-500:]}"
             )
 
         video_path = max(matches, key=os.path.getctime)
