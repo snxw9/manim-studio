@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\Abdulfatai\\Documents\\manim-studio\\logs\\.dc2a5e436c3cde84ca670706d8d97d8f3f9f4d0a-audit.json",
+    "files": [
+        {
+            "date": 1774166711109,
+            "name": "C:\\Users\\Abdulfatai\\Documents\\manim-studio\\logs\\mcp-puppeteer-2026-03-22.log",
+            "hash": "994b6d0f39a264012dcf835f497fd0ed6113f0beb8dbba9e87155d852db8c86f"
+        }
+    ],
+    "hashType": "sha256"
+}

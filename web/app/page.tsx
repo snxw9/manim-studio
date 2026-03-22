@@ -287,12 +287,14 @@ function Sidebar() {
   };
 
   const handleAsset = (snippet: string) => {
-    setGeneratedCode((prev: string) => prev
+    const prev = useStore.getState().generatedCode;
+    const next = prev
       ? prev + '\n        # asset\n        ' + snippet
-      : 'from manim import *\n\nclass MyScene(Scene):\n    def construct(self):\n        ' + snippet
-    );
+      : 'from manim import *\n\nclass MyScene(Scene):\n    def construct(self):\n        ' + snippet;
+    setGeneratedCode(next);
     setActiveTab('code');
   };
+
 
   const rowStyle = (active?: boolean) => ({
     display: 'flex', alignItems: 'center',

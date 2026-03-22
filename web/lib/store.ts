@@ -29,7 +29,7 @@ interface Store {
 
   // Actions
   setPrompt: (p: string) => void;
-  setGeneratedCode: (c: string | ((prev: string) => string)) => void;
+  setGeneratedCode: (c: string) => void;
   setActiveTab: (t: ActiveTab) => void;
   setSelectedTemplate: (id: string | null) => void;
   setRenderStatus: (s: RenderStatus) => void;
@@ -64,9 +64,7 @@ export const useStore = create<Store>((set) => ({
   theme: 'dark',
 
   setPrompt: (p) => set({ prompt: p }),
-  setGeneratedCode: (c) => set((state) => ({ 
-    generatedCode: typeof c === 'function' ? c(state.generatedCode) : c 
-  })),
+  setGeneratedCode: (c) => set({ generatedCode: c }),
   setActiveTab: (t) => set({ activeTab: t }),
   setSelectedTemplate: (id) => set({ selectedTemplate: id }),
   setRenderStatus: (s) => set({ renderStatus: s }),
