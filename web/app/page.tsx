@@ -286,12 +286,16 @@ function Sidebar() {
     setActiveTab('code');
   };
 
-  const handleAsset = (snippet: string) => {
-    const prev = useStore.getState().generatedCode;
-    const next = prev
-      ? prev + '\n        # asset\n        ' + snippet
-      : 'from manim import *\n\nclass MyScene(Scene):\n    def construct(self):\n        ' + snippet;
-    setGeneratedCode(next);
+  const handleAsset = (snippet: string, label: string) => {
+    // Always wrap asset in a complete valid Scene
+    const className = label.replace(/\s+/g, '') + 'Scene';
+    const fullCode = `from manim import *
+
+class ${className}(Scene):
+    def construct(self):
+        ${snippet.split('\n').join('\n        ')}
+`;
+    setGeneratedCode(fullCode);
     setActiveTab('code');
   };
 
@@ -373,7 +377,7 @@ function Sidebar() {
                 <button
                   key={a.id}
                   style={rowStyle()}
-                  onClick={() => handleAsset(a.snippet)}
+                  onClick={() => handleAsset(a.snippet, a.label)}
                 >
                   <span style={{ width: 18, opacity: 0.6, fontSize: 13 }}>{a.icon}</span>
                   {a.label}
@@ -567,6 +571,7 @@ function RightPanel({ onRender }: { onRender: () => void }) {
   const {
     generatedCode, renderStatus, errorMessage,
     videoUrl, setVideoUrl, quality, format,
+    setRenderStatus, setRenderTime
   } = useStore();
 
   const [scenes, setScenes] = useState([{ id: '1', name: 'Scene 1', duration: 5 }]);
@@ -588,7 +593,31 @@ function RightPanel({ onRender }: { onRender: () => void }) {
   return (
     <div style={S.rPanel}>
       {/* Output / video */}
-      <div style={sectionHead}>Output</div>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 12px 6px' }}>
+        <span style={{ fontSize: 9, letterSpacing: '0.12em', color: 'var(--t3)', textTransform: 'uppercase', flex: 1 }}>
+          Output
+        </span>
+        {videoUrl && (
+          <button
+            onClick={() => {
+              URL.revokeObjectURL(videoUrl);
+              setVideoUrl(null);
+              setRenderStatus('idle');
+              setRenderTime(null);
+            }}
+            style={{
+              fontSize: 9, color: 'var(--t3)',
+              letterSpacing: '0.05em', cursor: 'pointer',
+              background: 'none', border: 'none',
+              fontFamily: 'inherit', padding: '2px 4px',
+            }}
+            onMouseOver={e => e.currentTarget.style.color = 'var(--t1)'}
+            onMouseOut={e => e.currentTarget.style.color = 'var(--t3)'}
+          >
+            clear
+          </button>
+        )}
+      </div>
       <div style={{
         height: 180, background: '#000',
         margin: '0 12px', borderRadius: 2,
