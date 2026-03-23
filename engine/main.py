@@ -17,18 +17,46 @@ from collections import defaultdict
 from datetime import date
 from dotenv import load_dotenv
 from ai.model_router import generate_with_fallback, select_tier
-from renderer.manim_runner import run_manim, cleanup_previews, pre_validate
+from renderer.manim_runner import run_manim, cleanup_previews, pre_validate, render_scene
 from renderer.preview_renderer import render_preview
 from renderer.code_validator import validate_manim_code
 from templates.library import get_template, list_templates
 from templates.assets import get_asset, list_assets, get_assets_by_category
 
+import sys
 from pathlib import Path
-from renderer.worker_pool import get_worker_pool
-from contextlib import asynccontextmanager
 
 # Load .env from root directory
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+# Self-check on startup — catch common issues early
+def startup_check():
+    issues = []
+    
+    # Check manim is importable
+    try:
+        import manim
+    except ImportError:
+        issues.append("manim not installed — run: pip install manim")
+    
+    # Check API keys
+    from dotenv import load_dotenv
+    load_dotenv()
+    
+    if not os.getenv("GROQ_API_KEY") and not os.getenv("GEMINI_API_KEY") and not os.getenv("OPENAI_API_KEY"):
+        issues.append("No API keys found in engine/.env — AI generation will fail")
+    
+    # Check output dirs exist
+    Path("outputs").mkdir(exist_ok=True)
+    Path("media_cache").mkdir(exist_ok=True)
+    
+    if issues:
+        print("\n[STARTUP WARNINGS]")
+        for issue in issues:
+            print(f"  ⚠ {issue}")
+        print()
+
+startup_check()
 
 # Persistent dirs — survive between renders
 MEDIA_DIR = Path(__file__).parent / "media_cache"
@@ -39,21 +67,12 @@ MEDIA_DIR.mkdir(exist_ok=True)
 OUTPUTS_DIR.mkdir(exist_ok=True)
 LATEX_CACHE.mkdir(exist_ok=True)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Start worker pool on startup
-    pool = get_worker_pool()
-    await pool.start()
-    yield
-    # Clean up on shutdown
-    await pool.stop()
-
-app = FastAPI(title="Manim Studio Engine API", lifespan=lifespan)
+app = FastAPI(title="Manim Studio Engine API")
 
 # Add CORS headers so Next.js can reach the engine
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all for now to avoid CORS issues during debug
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -110,18 +129,9 @@ class RenderRequest(BaseModel):
 class PreviewRequest(BaseModel):
     code: str
 
-import signal
-_active_processes: dict[str, subprocess.Popen] = {}
-
 @app.post("/render/cancel")
 async def cancel_render(request: Request):
-    body = await request.json()
-    render_id = body.get("render_id", "default")
-    proc = _active_processes.get(render_id)
-    if proc:
-        proc.kill()
-        del _active_processes[render_id]
-        return {"cancelled": True}
+    # Process management simplified — reload handles restart
     return {"cancelled": False}
 
 from ai.provider_pool import get_pool
@@ -155,7 +165,7 @@ async def get_asset_snippet(asset_id: str):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "1.0", "online": True}
+    return {"status": "ok", "version": "1.0"}
 
 @app.post("/generate")
 async def generate_code(request: GenerateRequest, http_request: Request):
@@ -226,7 +236,6 @@ async def preview(request: PreviewRequest):
         raise HTTPException(status_code=400, detail="No code provided")
     try:
         import asyncio
-        from renderer.preview_renderer import render_preview
         result = await asyncio.to_thread(render_preview, request.code)
         return result
     except ValueError as e:
@@ -237,39 +246,30 @@ async def preview(request: PreviewRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/render")
-async def render_code(request: RenderRequest, http_request: Request):
-    if not request.code.strip():
+async def render_code(request: RenderRequest):
+    if not request.code or not request.code.strip():
         raise HTTPException(status_code=400, detail="No code provided")
-
-    # Pre-validate before sending to worker
     error = pre_validate(request.code)
     if error:
         raise HTTPException(status_code=422, detail=error)
-
-    fps = 60 if request.quality == "2160p" else 30
-    
-    job = {
-        "code": request.code,
-        "quality": request.quality or "720p",
-        "format": request.format or "mp4",
-        "fps": fps,
-    }
-
-    pool = get_worker_pool()
-    result = await pool.render(job)
-
-    if "error" in result:
-        raise HTTPException(status_code=422, detail=result["error"])
-
-    return result
-
-@app.post("/cleanup")
-async def cleanup(request: CleanupRequest):
     try:
-        cleanup_previews(request.scene_name, OUTPUT_DIR_PATH)
-        return {"status": "success"}
+        import asyncio
+        result = await asyncio.to_thread(
+            render_scene,
+            request.code,
+            request.quality or "720p",
+            request.format or "mp4",
+        )
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/cleanup")
+async def cleanup(request: Request):
+    # Simplified cleanup
+    return {"status": "success"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --names ENGINE,WEB --prefix-colors yellow,cyan --kill-others-on-fail \"node scripts/engine.js\" \"next dev --turbopack\"",
+    "dev": "concurrently --names ENGINE,WEB --prefix-colors yellow,cyan \"node scripts/engine.js\" \"next dev --turbopack\"",
     "build": "next build",
     "start": "next start",
     "test": "vitest",
-    "engine:only": "node scripts/engine.js"
+    "engine:only": "node scripts/engine.js",
+    "engine:setup": "cd ../engine && python -m venv venv && venv\\Scripts\\pip install -r requirements.txt"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

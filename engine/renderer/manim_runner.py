@@ -156,3 +156,83 @@ def run_manim(code: str, preview: bool = False, quality: str = "720p", fmt: str 
         print(f"Manim Error Stdout: {e.stdout}")
         print(f"Manim Error Stderr: {e.stderr}")
         raise RuntimeError(f"Manim rendering failed:\n{e.stderr}")
+
+def render_scene(code: str, quality: str = "720p", fmt: str = "mp4") -> dict:
+    import base64, glob, os, re, subprocess, tempfile
+    from pathlib import Path
+
+    OUTPUTS_DIR = Path(__file__).parent.parent / "outputs"
+    OUTPUTS_DIR.mkdir(exist_ok=True)
+    MEDIA_DIR = Path(__file__).parent.parent / "media_cache"
+    MEDIA_DIR.mkdir(exist_ok=True)
+
+    match = re.search(r'class\s+(\w+)\s*\(', code)
+    if not match:
+        raise ValueError("No Scene class found")
+    class_name = match.group(1)
+
+    quality_map = {
+        "480p": "-ql", "720p": "-qm",
+        "1080p": "-qh", "2160p": "-qk",
+    }
+    q_flag = quality_map.get(quality, "-qm")
+    fmt_actual = "mp4" if fmt == "mov" else fmt
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        code_file = os.path.join(tmpdir, "scene.py")
+        with open(code_file, "w", encoding="utf-8") as f:
+            f.write(code)
+
+        cmd = [
+            "manim", q_flag,
+            "--fps", "30",
+            "--format", fmt_actual,
+            "--media_dir", str(MEDIA_DIR),
+            "--progress_bar", "none",
+            code_file, class_name,
+        ]
+
+        for i, item in enumerate(cmd):
+            if not isinstance(item, str):
+                raise TypeError(f"cmd[{i}] is {type(item).__name__}: {repr(item)}")
+
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=300,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr[-3000:])
+
+        matches = glob.glob(
+            os.path.join(str(MEDIA_DIR), "**", f"*.{fmt_actual}"),
+            recursive=True,
+        )
+        matches += glob.glob(
+            os.path.join(tmpdir, "**", f"*.{fmt_actual}"),
+            recursive=True,
+        )
+
+        if not matches:
+            raise RuntimeError(f"No output file.\n{result.stderr[-500:]}")
+
+        video_path = max(matches, key=os.path.getctime)
+
+        # Friendly filename
+        spaced = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', class_name)
+        spaced = spaced.replace(' Scene', '').replace('Scene', '').strip()
+        friendly = f"{spaced} ({quality}).{fmt_actual}"
+        friendly_safe = re.sub(r'[<>:\"/\\|?*]', '', friendly)
+        output_path = OUTPUTS_DIR / friendly_safe
+        import shutil
+        shutil.copy2(video_path, output_path)
+
+        with open(video_path, "rb") as f:
+            video_bytes = f.read()
+
+        return {
+            "video": base64.b64encode(video_bytes).decode(),
+            "mimeType": f"video/{fmt_actual}",
+            "className": class_name,
+            "filename": friendly_safe,
+            "size": len(video_bytes),
+        }
