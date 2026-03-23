@@ -570,7 +570,7 @@ function MainArea({
 function RightPanel({ onRender, elapsed }: { onRender: () => void, elapsed: number }) {
   const {
     generatedCode, renderStatus, errorMessage,
-    videoUrl, setVideoUrl, quality, format,
+    videoUrl, videoFilename, setVideoUrl, quality, format,
     setRenderStatus, setRenderTime, setErrorMessage
   } = useStore();
 
@@ -586,7 +586,7 @@ function RightPanel({ onRender, elapsed }: { onRender: () => void, elapsed: numb
     if (!videoUrl) return;
     const a = document.createElement('a');
     a.href = videoUrl;
-    a.download = `animation_${quality}.${format}`;
+    a.download = videoFilename || `animation_${quality}.${format}`;
     a.click();
   };
 
@@ -624,6 +624,7 @@ function RightPanel({ onRender, elapsed }: { onRender: () => void, elapsed: numb
         display: 'flex', alignItems: 'center',
         justifyContent: 'center', flexShrink: 0,
         overflow: 'hidden', border: '1px solid var(--line)',
+        flexDirection: 'column',
       }}>
         {videoUrl ? (
           <video
@@ -641,6 +642,21 @@ function RightPanel({ onRender, elapsed }: { onRender: () => void, elapsed: numb
           </span>
         )}
       </div>
+
+      {videoFilename && (
+        <div style={{
+          padding: '4px 12px',
+          fontSize: 10,
+          color: 'var(--t3)',
+          letterSpacing: '0.03em',
+          borderTop: '1px solid var(--line)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {videoFilename}
+        </div>
+      )}
 
       {/* Render button */}
       <div style={{ padding: '10px 12px' }}>

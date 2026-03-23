@@ -14,6 +14,7 @@ interface Store {
   renderStatus: RenderStatus;
   errorMessage: string | null;
   videoUrl: string | null;
+  videoFilename: string | null;
   lastProvider: string | null;
   lastModel: string | null;
   renderTime: number | null;
@@ -35,6 +36,7 @@ interface Store {
   setRenderStatus: (s: RenderStatus) => void;
   setErrorMessage: (m: string | null) => void;
   setVideoUrl: (u: string | null) => void;
+  setVideoFilename: (f: string | null) => void;
   setLastProvider: (p: string | null) => void;
   setLastModel: (m: string | null) => void;
   setRenderTime: (t: number | null) => void;
@@ -54,6 +56,7 @@ export const useStore = create<Store>((set) => ({
   renderStatus: 'idle',
   errorMessage: null,
   videoUrl: null,
+  videoFilename: null,
   lastProvider: null,
   lastModel: null,
   renderTime: null,
@@ -70,6 +73,7 @@ export const useStore = create<Store>((set) => ({
   setRenderStatus: (s) => set({ renderStatus: s }),
   setErrorMessage: (m) => set({ errorMessage: m }),
   setVideoUrl: (u) => set({ videoUrl: u }),
+  setVideoFilename: (f) => set({ videoFilename: f }),
   setLastProvider: (p) => set({ lastProvider: p }),
   setLastModel: (m) => set({ lastModel: m }),
   setRenderTime: (t) => set({ renderTime: t }),
@@ -83,6 +87,7 @@ export const useStore = create<Store>((set) => ({
     renderStatus: 'idle',
     errorMessage: null,
     videoUrl: null,
+    videoFilename: null,
     renderTime: null,
     lastProvider: null,
     lastModel: null,

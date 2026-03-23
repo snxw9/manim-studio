@@ -10,11 +10,24 @@ import base64
 import glob
 import re
 import tempfile
+import shutil
 from pathlib import Path
 import subprocess
 
 MEDIA_DIR = Path(__file__).parent.parent / "media_cache"
 MEDIA_DIR.mkdir(exist_ok=True)
+OUTPUTS_DIR = Path(__file__).parent.parent / "outputs"
+OUTPUTS_DIR.mkdir(exist_ok=True)
+
+def get_friendly_name(class_name: str, quality: str, fmt: str) -> str:
+    # Convert CamelCase to Title Case with spaces
+    # WaterfallModel -> Waterfall Model
+    # PythagoreanTheorem -> Pythagorean Theorem
+    spaced = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', class_name)
+    spaced = re.sub(r'(?<=[A-Z])(?=[A-Z][a-z])', ' ', spaced)
+    # Remove "Scene" suffix if present
+    spaced = spaced.replace(' Scene', '').replace('Scene', '').strip()
+    return f"{spaced} ({quality}).{fmt}"
 
 def render_job(job: dict) -> dict:
     code = job["code"]
@@ -72,13 +85,23 @@ def render_job(job: dict) -> dict:
             return {"error": f"No output file found.\n{result.stderr[-500:]}"}
 
         video_path = max(matches, key=os.path.getctime)
-        with open(video_path, "rb") as f:
+        
+        # After finding the output file, rename it into OUTPUTS_DIR:
+        friendly = get_friendly_name(class_name, quality, fmt_actual)
+        # Sanitize for filesystem
+        friendly_safe = re.sub(r'[<>:"/\\|?*]', '', friendly)
+        output_path = OUTPUTS_DIR / friendly_safe
+        
+        shutil.copy2(video_path, output_path)
+
+        with open(output_path, "rb") as f:
             video_bytes = f.read()
 
         return {
             "video": base64.b64encode(video_bytes).decode(),
             "mimeType": f"video/{fmt_actual}",
             "className": class_name,
+            "filename": friendly_safe,
             "size": len(video_bytes),
         }
 
