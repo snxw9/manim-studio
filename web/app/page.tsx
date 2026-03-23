@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
+import { ErrorPanel } from '@/components/ui/ErrorPanel';
+
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
 // ─── Inline styles as constants ─────────────────────────────────

@@ -110,6 +110,137 @@ obj.midpoint() — use obj.get_center()
 
 MANIM_SYSTEM_PROMPT = f"""{MANIM_API_REFERENCE}
 
+=== QUALITY EXAMPLES — match this standard ===
+
+EXAMPLE 1 — Good process diagram (Waterfall Model):
+from manim import *
+
+class WaterfallModel(Scene):
+    def construct(self):
+        title = Text("Waterfall Model", font_size=36, color=WHITE)
+        title.to_edge(UP, buff=0.4)
+        self.play(Write(title))
+
+        phases = ["Requirements", "Design", "Implementation", "Testing", "Deployment"]
+        colors = [BLUE, GREEN, YELLOW, ORANGE, RED]
+        boxes = VGroup()
+
+        for i, (phase, color) in enumerate(zip(phases, colors)):
+            box = Rectangle(width=4.5, height=0.65, color=color, fill_opacity=0.25)
+            label = Text(phase, font_size=22, color=color)
+            label.move_to(box.get_center())
+            group = VGroup(box, label)
+            group.shift(DOWN * (i * 0.95) + UP * 1.2)
+            boxes.add(group)
+
+        arrows = VGroup()
+        for i in range(len(boxes) - 1):
+            arrow = Arrow(
+                boxes[i].get_bottom() + DOWN * 0.05,
+                boxes[i+1].get_top() + UP * 0.05,
+                buff=0.0, color=GRAY, stroke_width=2,
+            )
+            arrows.add(arrow)
+
+        for i, box in enumerate(boxes):
+            self.play(FadeIn(box, shift=RIGHT * 0.3), run_time=0.5)
+            if i < len(arrows):
+                self.play(GrowArrow(arrows[i]), run_time=0.3)
+
+        self.wait(2)
+        self.play(FadeOut(VGroup(title, boxes, arrows)))
+
+
+EXAMPLE 2 — Good math proof:
+from manim import *
+
+class PythagoreanTheorem(Scene):
+    def construct(self):
+        title = Text("Pythagorean Theorem", font_size=32, color=WHITE)
+        title.to_edge(UP, buff=0.4)
+        self.play(Write(title))
+
+        a, b = 3, 4
+        scale = 0.6
+        A = np.array([0, 0, 0])
+        B = np.array([a * scale, 0, 0])
+        C = np.array([0, b * scale, 0])
+
+        triangle = Polygon(A, B, C, color=WHITE, stroke_width=2.5)
+        triangle.move_to(ORIGIN + LEFT * 0.5)
+        self.play(Create(triangle))
+
+        right = RightAngle(Line(A, B), Line(A, C), length=0.2, color=GRAY)
+        right.move_to(triangle.get_vertices()[0] + RIGHT * 0.15 + UP * 0.15)
+        self.play(Create(right))
+
+        a_label = MathTex(r"a=3", font_size=26, color=BLUE)
+        b_label = MathTex(r"b=4", font_size=26, color=GREEN)
+        c_label = MathTex(r"c=5", font_size=26, color=YELLOW)
+        a_label.next_to(triangle, DOWN, buff=0.2)
+        b_label.next_to(triangle, LEFT, buff=0.2)
+        c_label.next_to(triangle, RIGHT, buff=0.2)
+        self.play(Write(a_label), Write(b_label), Write(c_label))
+        self.wait(0.5)
+
+        eq1 = MathTex(r"a^2 + b^2 = c^2", font_size=36)
+        eq2 = MathTex(r"3^2 + 4^2 = 5^2", font_size=36)
+        eq3 = MathTex(r"9 + 16 = 25", font_size=36, color=YELLOW)
+        for eq in [eq1, eq2, eq3]:
+            eq.to_edge(RIGHT, buff=1.5)
+        eq1.shift(UP * 0.5)
+        eq2.next_to(eq1, DOWN, buff=0.4)
+        eq3.next_to(eq2, DOWN, buff=0.4)
+
+        self.play(Write(eq1))
+        self.play(Write(eq2))
+        self.play(Write(eq3))
+        self.wait(2)
+        self.play(*[FadeOut(m) for m in self.mobjects])
+
+
+EXAMPLE 3 — Good graph animation:
+from manim import *
+
+class DerivativeGraph(Scene):
+    def construct(self):
+        axes = Axes(
+            x_range=[-3, 3, 1], y_range=[-1, 9, 1],
+            x_length=6, y_length=5,
+            axis_config={"color": GRAY, "include_numbers": True},
+        )
+        labels = axes.get_axis_labels(x_label="x", y_label="y")
+        self.play(Create(axes), Write(labels))
+
+        curve = axes.plot(lambda x: x**2, color=BLUE, x_range=[-3, 3])
+        curve_label = axes.get_graph_label(curve, r"f(x)=x^2", x_val=2.2, color=BLUE)
+        self.play(Create(curve), Write(curve_label))
+        self.wait(0.5)
+
+        x_val = 1.5
+        tangent = axes.plot(
+            lambda x: 2 * x_val * (x - x_val) + x_val**2,
+            color=ORANGE, x_range=[0, 3]
+        )
+        dot = Dot(axes.c2p(x_val, x_val**2), color=ORANGE)
+        slope_label = MathTex(
+            r"f'(x)=2x", font_size=28, color=ORANGE
+        ).to_edge(DOWN, buff=0.5)
+
+        self.play(Create(dot), Create(tangent), Write(slope_label))
+        self.wait(2)
+        self.play(*[FadeOut(m) for m in self.mobjects])
+
+=== END EXAMPLES ===
+
+IMPORTANT: Every animation you generate must match the quality and
+structure of these examples. Always:
+- Add a title
+- Use color meaningfully (different colors for different elements)
+- Label everything clearly
+- Build the scene progressively (don't show everything at once)
+- End with FadeOut of all mobjects
+
 You are a Manim Community Edition v0.18 expert.
 Output ONLY valid Python code. No markdown fences. No explanation.
 
