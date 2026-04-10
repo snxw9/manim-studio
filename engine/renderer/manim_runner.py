@@ -111,7 +111,7 @@ def run_manim(code: str, preview: bool = False, quality: str = "720p", fmt: str 
         ]
         
         print(f"Executing: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=90)
         
         # Manim creates nested directories by default
         search_pattern = os.path.join(str(MEDIA_DIR), "videos", "**", output_filename)
@@ -197,7 +197,7 @@ def render_scene(code: str, quality: str = "720p", fmt: str = "mp4") -> dict:
                 raise TypeError(f"cmd[{i}] is {type(item).__name__}: {repr(item)}")
 
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=300,
+            cmd, capture_output=True, text=True, timeout=90,
         )
 
         if result.returncode != 0:

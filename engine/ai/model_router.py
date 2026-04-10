@@ -39,7 +39,14 @@ def _save_cache(key: str, result: dict):
 
 def select_tier(prompt: str) -> ModelTier:
     words = len(prompt.split())
-    return "fast" if words < 15 else "smart" if words > 50 else "standard"
+    # Only use 'fast' for extremely short, simple requests
+    if words < 5:
+        return "fast"
+    # Use 'smart' for detailed requests
+    if words > 40:
+        return "smart"
+    # Everything else (like "waterfall model") gets 'standard'
+    return "standard"
 
 def is_quota_error(err: str) -> bool:
     return any(s in err.lower() for s in ["429", "quota", "rate_limit", "insufficient_quota", "exceeded"])

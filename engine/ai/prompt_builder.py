@@ -108,7 +108,7 @@ obj.length() — use obj.get_length()
 obj.midpoint() — use obj.get_center()
 """
 
-MANIM_SYSTEM_PROMPT = f"""{MANIM_API_REFERENCE}
+MANIM_SYSTEM_PROMPT = MANIM_API_REFERENCE + """
 
 === QUALITY EXAMPLES — match this standard ===
 

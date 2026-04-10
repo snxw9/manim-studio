@@ -45,7 +45,7 @@ def render_preview(code: str) -> dict:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=90,
             )
         except subprocess.TimeoutExpired:
             raise RuntimeError("Preview timed out")
