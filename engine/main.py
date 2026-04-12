@@ -141,6 +141,17 @@ async def pool_status():
     """Shows current provider rotation state — useful for debugging."""
     return get_pool().status()
 
+@app.get("/render/estimates")
+async def render_estimates():
+    return {
+        "estimates": {
+            "480p":  { "label": "Low",  "seconds": 30,  "range": "15–60s",   "use": "Quick preview" },
+            "720p":  { "label": "Mid",  "seconds": 90,  "range": "30–120s",  "use": "Standard export" },
+            "1080p": { "label": "High", "seconds": 180, "range": "60–240s",  "use": "Final quality" },
+            "2160p": { "label": "4K",   "seconds": 420, "range": "4–8 min",  "use": "Maximum quality" },
+        }
+    }
+
 @app.get("/templates")
 async def get_templates():
     return {"templates": list_templates()}

@@ -175,7 +175,16 @@ def render_scene(code: str, quality: str = "720p", fmt: str = "mp4") -> dict:
         "480p": "-ql", "720p": "-qm",
         "1080p": "-qh", "2160p": "-qk",
     }
+    
+    QUALITY_TIMEOUTS = {
+        "-ql": 60,    # 480p  — simple scenes render fast
+        "-qm": 120,   # 720p  — standard, most scenes fit here
+        "-qh": 240,   # 1080p — high quality, LaTeX heavy scenes
+        "-qk": 480,   # 4K    — very slow, give it 8 minutes
+    }
+
     q_flag = quality_map.get(quality, "-qm")
+    timeout = QUALITY_TIMEOUTS.get(q_flag, 120)
     fmt_actual = "mp4" if fmt == "mov" else fmt
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -196,9 +205,16 @@ def render_scene(code: str, quality: str = "720p", fmt: str = "mp4") -> dict:
             if not isinstance(item, str):
                 raise TypeError(f"cmd[{i}] is {type(item).__name__}: {repr(item)}")
 
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=90,
-        )
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(
+                f"Render timed out after {timeout}s at {quality} quality.\n"
+                f"Try a lower quality setting or simplify the animation.\n"
+                f"Tip: Use 720p for faster iteration, 1080p only for final export."
+            )
 
         if result.returncode != 0:
             raise RuntimeError(result.stderr[-3000:])

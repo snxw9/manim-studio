@@ -64,15 +64,25 @@ const ASPECT_RATIOS: { value: AspectRatio; label: string; icons: React.ReactNode
   { value: "21:9", label: "21 : 9", icons: [] },
 ];
 
+const QUALITY_ESTIMATES: Record<string, { seconds: number; range: string }> = {
+  '360p':  { seconds: 20,  range: '10–40s' },
+  '720p':  { seconds: 90,  range: '30–120s' },
+  '1080p': { seconds: 180, range: '60–240s' },
+  '2k':    { seconds: 300, range: '3–6 min' },
+  '4k':    { seconds: 420, range: '4–8 min' },
+};
+
 interface HeaderProps {
   settings: RenderSettings;
   engineOnline: boolean;
   onRender?: () => void;
   isRendering?: boolean;
   elapsed?: number;
+  renderTime?: number | null;
+  generatedCode?: string;
 }
 
-export function Header({ settings, engineOnline, onRender, isRendering, elapsed }: HeaderProps) {
+export function Header({ settings, engineOnline, onRender, isRendering, elapsed = 0, renderTime = null, generatedCode = "" }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const { resolution, frameRate, format, aspectRatio,
           setResolution, setFrameRate, setFormat, setAspectRatio } = settings;
@@ -95,13 +105,33 @@ export function Header({ settings, engineOnline, onRender, isRendering, elapsed 
 
       {/* File pill */}
       <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground font-mono bg-muted/60 rounded-lg px-3 py-1.5 border border-border/60">
-        <div className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />
-        <span>animation.py</span>
+        <div className={`h-1.5 w-1.5 rounded-full ${engineOnline ? "bg-orange-400 animate-pulse" : "bg-muted-foreground"}`} />
+        <span>animation_scene.py</span>
         <span className="text-muted-foreground/40">— unsaved</span>
       </div>
 
       {/* Actions */}
       <div className="flex items-center gap-2">
+        {/* Render Time Info */}
+        <div className="flex flex-col items-end mr-2 text-right">
+          <div className="text-[11px] text-muted-foreground font-mono">
+            {renderTime !== null ? (
+              `Rendered in ${renderTime}s`
+            ) : isRendering ? (
+              `Est. ${QUALITY_ESTIMATES[resolution]?.range || '30–120s'} · ${elapsed}s elapsed`
+            ) : generatedCode ? (
+              `~${QUALITY_ESTIMATES[resolution]?.range || '30–120s'} at ${resolution}`
+            ) : null}
+          </div>
+          {(resolution === '1080p' || resolution === '2k' || resolution === '4k') && !isRendering && (
+            <div className="text-[10px] text-orange-500 font-mono mt-0.5">
+              {resolution === '4k' || resolution === '2k'
+                ? 'Warning: High res may take 4–8 minutes'
+                : 'High quality may take 2–4 minutes'}
+            </div>
+          )}
+        </div>
+
         {/* Engine status */}
         <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/50 border border-border/60 text-[10px] font-medium">
           <div className={`h-1.5 w-1.5 rounded-full ${engineOnline ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
@@ -123,22 +153,17 @@ export function Header({ settings, engineOnline, onRender, isRendering, elapsed 
 
         <Button
           size="sm"
+          disabled={isRendering}
+          onClick={onRender}
           className="h-8 gap-1.5 text-xs font-semibold rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm glow-orange"
           data-testid="button-render"
-          onClick={onRender}
-          disabled={isRendering || !engineOnline}
         >
           {isRendering ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Rendering ({elapsed}s)
-            </>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <>
-              <Play className="h-3.5 w-3.5 fill-current" />
-              Render
-            </>
+            <Play className="h-3.5 w-3.5 fill-current" />
           )}
+          {isRendering ? "Rendering..." : "Render"}
         </Button>
 
         <DropdownMenu>

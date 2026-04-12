@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { PromptInput } from "@/components/workspace/prompt-input";
@@ -8,7 +8,7 @@ import { CodeEditor } from "@/components/workspace/code-editor";
 import { VideoOutput } from "@/components/workspace/video-output";
 import { ApiSettings } from "@/components/workspace/api-settings";
 import { Sparkles, Code2 } from "lucide-react";
-import { TEMPLATES } from "@/lib/templates";
+import { BUILTIN_TEMPLATES } from "@/lib/builtinTemplates";
 
 export type Resolution  = "360p" | "720p" | "1080p" | "2k" | "4k";
 export type FrameRate   = "24fps" | "30fps" | "60fps" | "120fps";
@@ -44,7 +44,12 @@ export default function Home() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoFilename, setVideoFilename] = useState<string | null>(null);
   const [engineOnline, setEngineOnline] = useState(false);
+  const [selectedApi, setSelectedApi] = useState("auto");
+
+  // Render timer state
   const [elapsed, setElapsed] = useState(0);
+  const [renderTime, setRenderTime] = useState<number | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Health check
   useEffect(() => {
@@ -62,6 +67,11 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
+  // Timer cleanup on unmount
+  useEffect(() => {
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, []);
+
   const handleGenerate = async (prompt: string) => {
     if (!prompt.trim()) return;
     setIsGenerating(true);
@@ -70,7 +80,7 @@ export default function Home() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, preferredProvider: selectedApi }),
       });
       const data = await res.json();
       if (data.code) {
@@ -80,7 +90,7 @@ export default function Home() {
         setError(data.error || 'Generation failed');
       }
     } catch (err: any) {
-      setError('Engine offline — start with npm run dev');
+      setError('Engine offline or error: ' + err.message);
     } finally {
       setIsGenerating(false);
     }
@@ -89,20 +99,39 @@ export default function Home() {
   const handleRender = async () => {
     if (!generatedCode?.trim()) return;
     setIsRendering(true);
-    setElapsed(0);
     setError(null);
-    const timer = setInterval(() => setElapsed(e => e + 1), 1000);
+    setRenderTime(null);
+    setElapsed(0);
+    
+    const startTime = Date.now();
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+
+    const qualityMap: Record<string, string> = {
+      "360p": "480p",
+      "720p": "720p",
+      "1080p": "1080p",
+      "2k": "1080p",
+      "4k": "2160p"
+    };
+    const qualityValue = qualityMap[resolution] || resolution || '720p';
+
     try {
       const res = await fetch('/api/render', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           code: generatedCode, 
-          quality: resolution || '720p',
+          quality: qualityValue,
           format: format || 'mp4'
         }),
       });
       const data = await res.json();
+      if (data.error) {
+        setError(data.error);
+        return;
+      }
       if (data.video) {
         const bytes = atob(data.video);
         const arr = new Uint8Array(bytes.length);
@@ -110,30 +139,23 @@ export default function Home() {
         const blob = new Blob([arr], { type: 'video/mp4' });
         setVideoUrl(URL.createObjectURL(blob));
         setVideoFilename(data.filename || 'animation.mp4');
-      } else {
-        setError(data.error || 'Render failed');
+      } else if (data.videoUrl) {
+        setVideoUrl('http://localhost:8000' + data.videoUrl);
       }
     } catch (err: any) {
       setError('Render failed: ' + err.message);
     } finally {
+      if (timerRef.current) clearInterval(timerRef.current);
+      setRenderTime(Math.floor((Date.now() - startTime) / 1000));
       setIsRendering(false);
-      clearInterval(timer);
     }
   };
 
-  const handleTemplateClick = (templateId: string) => {
-    // Map Replit's template names to our template IDs if needed
-    const mapping: Record<string, string> = {
-      "Geometry": "geometry_proofs",
-      "Calculus": "calculus",
-      "Linear Algebra": "matrix_transforms",
-      "Transforms": "matrix_transforms"
-    };
-    
-    const id = mapping[templateId] || templateId;
-    const t = TEMPLATES[id];
-    if (t) {
-      setGeneratedCode(t.code);
+  const handleTemplateClick = (templateKey: string) => {
+    const key = templateKey.toLowerCase().replace(/\s+/g, '_');
+    const template = BUILTIN_TEMPLATES[key];
+    if (template) {
+      setGeneratedCode(template.code);
       setLeftPanel("editor");
     }
   };
@@ -151,6 +173,8 @@ export default function Home() {
         onRender={handleRender}
         isRendering={isRendering}
         elapsed={elapsed}
+        renderTime={renderTime}
+        generatedCode={generatedCode}
       />
 
       <div className="flex flex-1 overflow-hidden min-h-0">
@@ -219,6 +243,8 @@ export default function Home() {
           <ApiSettings
             isOpen={isApiSettingsOpen}
             onToggle={() => setIsApiSettingsOpen(p => !p)}
+            selectedApi={selectedApi}
+            onApiChange={setSelectedApi}
           />
         </main>
       </div>
