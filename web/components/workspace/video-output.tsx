@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Play, Pause, SkipBack, SkipForward, Maximize, Download, MonitorPlay } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Maximize, Download, MonitorPlay, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ interface VideoOutputProps {
   aspectRatio: AspectRatio;
   videoUrl?: string | null;
   videoFilename?: string | null;
+  onClear?: () => void;
 }
 
 const ASPECT_RATIO_STYLE: Record<AspectRatio, React.CSSProperties> = {
@@ -35,7 +36,7 @@ function secondsToTimecode(s: number): string {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, videoFilename }: VideoOutputProps) {
+export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, videoFilename, onClear }: VideoOutputProps) {
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -85,6 +86,17 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
     a.href = videoUrl;
     a.download = videoFilename || 'animation.mp4';
     a.click();
+  };
+
+  const handleClear = () => {
+    if (!videoUrl) return;
+    const confirmed = window.confirm(
+      'Clear the current rendered video? This cannot be undone. ' +
+      'You can render again at any time.'
+    );
+    if (confirmed) {
+      onClear?.();
+    }
   };
 
   const sliderValue = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -142,16 +154,22 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
             </div>
           ) : (
             <video
+              key={videoUrl}
               ref={videoRef}
               src={videoUrl}
               autoPlay
               muted
-              loop
               className="w-full h-full object-contain"
               onTimeUpdate={onTimeUpdate}
               onLoadedMetadata={onLoadedMetadata}
               onClick={togglePlay}
-              onEnded={() => setPlaying(false)}
+              onEnded={() => {
+                setPlaying(false);
+                if (videoRef.current) {
+                  videoRef.current.currentTime = 0;
+                  videoRef.current.pause();
+                }
+              }}
             />
           )}
 
@@ -175,6 +193,22 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
 
       {/* Playback controls */}
       <div className="border-t border-border bg-card shrink-0 px-3 py-2.5 flex flex-col gap-2">
+        {videoUrl && (
+          <div className="flex flex-col items-end gap-1 px-1">
+            <button
+              onClick={handleClear}
+              className="text-[10px] text-muted-foreground/60 hover:text-destructive flex items-center gap-1 transition-colors"
+              title="Clear rendered video from memory"
+            >
+              <Trash2 className="h-2.5 w-2.5" />
+              Clear video
+            </button>
+            <p className="text-[9px] text-muted-foreground/40 leading-none">
+              Rendering a new scene replaces this automatically
+            </p>
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-mono text-muted-foreground w-8 text-right tabular-nums">
             {secondsToTimecode(currentTime)}

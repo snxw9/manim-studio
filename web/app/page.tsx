@@ -47,8 +47,9 @@ export default function Home() {
   const [selectedApi, setSelectedApi] = useState("auto");
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
-  // Monaco editor ref
+  // Monaco editor refs
   const editorRef = useRef<any>(null);
+  const latestCodeRef = useRef<string>("");
 
   // Render timer state
   const [elapsed, setElapsed] = useState(0);
@@ -89,6 +90,8 @@ export default function Home() {
       const data = await res.json();
       if (data.code) {
         setGeneratedCode(data.code);
+        latestCodeRef.current = data.code;
+        if (editorRef.current) editorRef.current.setValue(data.code);
         setLeftPanel("editor");
       } else {
         setError(data.error || 'Generation failed');
@@ -101,10 +104,15 @@ export default function Home() {
   };
 
   const handleRender = async () => {
-    const code = editorRef.current?.getValue() || generatedCode;
-    console.log('[render] code length:', code?.length, 'first 100:', code?.slice(0, 100));
+    // ALWAYS get fresh code from ref — never from stale state
+    const code = latestCodeRef.current || editorRef.current?.getValue() || generatedCode;
+    console.log('[render] Sending code, first line:', code.split('\n')[0]);
+    console.log('[render] Code length:', code.length);
 
-    if (!code?.trim()) return;
+    if (!code?.trim()) {
+      console.warn('[render] No code to render');
+      return;
+    }
 
     // Clear previous render completely
     if (videoUrl) {
@@ -204,7 +212,23 @@ export default function Home() {
     const template = BUILTIN_TEMPLATES[id];
     if (!template) return;
 
-    setGeneratedCode(template.code);
+    const code = template.code;
+
+    // Clear stale state visually
+    if (videoUrl) {
+      URL.revokeObjectURL(videoUrl);
+      setVideoUrl(null);
+      setVideoFilename(null);
+    }
+    setError(null);
+
+    // Update state AND Monaco directly
+    setGeneratedCode(code);
+    latestCodeRef.current = code;
+    if (editorRef.current) {
+      editorRef.current.setValue(code);
+    }
+
     setLeftPanel("editor");
     setSelectedTemplate(templateName);
   };
@@ -273,8 +297,14 @@ export default function Home() {
                 ) : (
                   <CodeEditor 
                     code={generatedCode} 
-                    onChange={setGeneratedCode} 
-                    onMount={(editor) => { editorRef.current = editor; }}
+                    onChange={(val) => {
+                      setGeneratedCode(val);
+                      latestCodeRef.current = val;
+                    }} 
+                    onMount={(editor) => { 
+                      editorRef.current = editor;
+                      latestCodeRef.current = editor.getValue();
+                    }}
                   />
                 )}
               </div>
@@ -288,6 +318,11 @@ export default function Home() {
                 aspectRatio={aspectRatio} 
                 videoUrl={videoUrl}
                 videoFilename={videoFilename}
+                onClear={() => {
+                  if (videoUrl) URL.revokeObjectURL(videoUrl);
+                  setVideoUrl(null);
+                  setVideoFilename(null);
+                }}
               />
             </div>
           </div>
