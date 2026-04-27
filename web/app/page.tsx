@@ -124,11 +124,11 @@ export default function Home() {
     // Read from module-level variable — NEVER stale
     const code = _currentCode;
     
-    console.log('[render] Code class name:', code.match(/class\s+(\w+)/)?.[1]);
-    console.log('[render] Code length:', code.length);
+    console.log('[render] Class:', code?.match(/class\s+(\w+)/)?.[1]);
+    console.log('[render] Length:', code?.length);
 
     if (!code?.trim()) {
-      alert('No code to render. Select a template or write code first.');
+      alert('No code to render. Pick a template or write code first.');
       return;
     }
 
@@ -192,68 +192,47 @@ export default function Home() {
   };
 
   const handleTemplateClick = (templateName: string) => {
-    // Map display names to template IDs
-    const nameToId: Record<string, string> = {
-      // Geometry
-      'Circle & Arcs':    'circle_and_arcs',
-      'Polygon Morph':    'polygon_morph',
-      '3D Axes Scene':    'three_d_axes',
-      'Angle Bisector':   'angle_bisector',
-      // Calculus
-      'Riemann Sums':     'riemann_sums',
-      'Taylor Series':    'taylor_series',
-      'Derivative Slope': 'derivative_slope',
-      'Arc Length Sweep': 'arc_length_sweep',
-      // Linear Algebra
-      'Matrix Transform': 'matrix_transform',
-      'Eigenvectors':     'eigenvectors',
-      'Dot Product':      'dot_product',
-      'Gram–Schmidt':     'gram_schmidt',
-      'Gram-Schmidt':     'gram_schmidt',
-      // Transforms
-      'Fourier Series':   'fourier_series',
-      'Cycloid Trace':    'cycloid_trace',
-      // Fractals
-      'Koch Snowflake':     'koch_snowflake',
-      'Sierpiński Triangle':'sierpinski_triangle',
-      'Dragon Curve':       'dragon_curve',
-      // Number Theory
-      'Sieve of Eratosthenes': 'sieve_eratosthenes',
-      'Prime Ulam Spiral':     'prime_ulam_spiral',
-      'Collatz Sequence':      'collatz_sequence',
-      'GCD Euclidean':         'gcd_euclidean',
-    };
+    console.log('[template] Received:', JSON.stringify(templateName));
 
-    const id = nameToId[templateName];
-    if (!id) return;
+    const normalize = (s: string) =>
+      s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    const template = BUILTIN_TEMPLATES[id];
-    if (!template) return;
+    const normalizedInput = normalize(templateName);
 
-    const code = template.code;
+    const match = Object.values(BUILTIN_TEMPLATES).find(
+      (t) =>
+        normalize(t.name) === normalizedInput ||
+        normalize(t.id) === normalizedInput ||
+        normalizedInput.includes(normalize(t.name)) ||
+        normalize(t.name).includes(normalizedInput)
+    );
 
-    // Update module-level store FIRST
-    _currentCode = code;
+    if (!match) {
+      console.warn('[template] No match for:', JSON.stringify(templateName));
+      console.warn('[template] Available:', Object.values(BUILTIN_TEMPLATES).map(t => t.name));
+      return;
+    }
 
-    // Clear stale state visually
+    console.log('[template] Matched:', match.name, '->', match.id);
+    console.log('[template] Class:', match.code.match(/class\s+(\w+)/)?.[1]);
+
+    _currentCode = match.code;
+
+    if (editorRef.current) {
+      editorRef.current.setValue(match.code);
+    }
+
+    setGeneratedCode(match.code);
+
     if (videoUrl) {
       URL.revokeObjectURL(videoUrl);
       setVideoUrl(null);
       setVideoFilename(null);
     }
+
     setError(null);
-
-    // Update state AND Monaco directly
-    setGeneratedCode(code);
-    if (editorRef.current) {
-      editorRef.current.setValue(code);
-    }
-
-    setLeftPanel("editor");
     setSelectedTemplate(templateName);
-
-    console.log('[template] Set code for:', templateName);
-    console.log('[template] Class name in code:', code.match(/class\s+(\w+)/)?.[1]);
+    setLeftPanel("editor");
   };
 
   const settings: RenderSettings = {
