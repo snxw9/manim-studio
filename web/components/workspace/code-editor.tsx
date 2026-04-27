@@ -5,9 +5,10 @@ import { useTheme } from "@/app/providers";
 interface CodeEditorProps {
   code: string;
   onChange: (code: string) => void;
+  onMount?: (editor: any) => void;
 }
 
-export function CodeEditor({ code, onChange }: CodeEditorProps) {
+export function CodeEditor({ code, onChange, onMount }: CodeEditorProps) {
   const { theme } = useTheme();
 
   return (
@@ -28,6 +29,7 @@ export function CodeEditor({ code, onChange }: CodeEditorProps) {
           defaultLanguage="python"
           value={code}
           onChange={(v) => onChange(v || "")}
+          onMount={onMount}
           theme={theme === "dark" ? "vs-dark" : "light"}
           options={{
             minimap: { enabled: false },

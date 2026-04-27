@@ -72,6 +72,14 @@ def run_manim(code: str, preview: bool = False, quality: str = "720p", fmt: str 
         "2160p": "-qk"
     }
     quality_flag = quality_map.get(quality, "-qm") if not preview else "-ql"
+
+    quality_resolution = {
+        "-ql": "854,480",    # 480p  16:9
+        "-qm": "1280,720",   # 720p  16:9
+        "-qh": "1920,1080",  # 1080p 16:9
+        "-qk": "3840,2160",  # 4K    16:9
+    }
+    resolution_val = quality_resolution.get(quality_flag, "1280,720")
     
     # FPS logic
     fps = "60" if quality == "2160p" else "30"
@@ -92,6 +100,7 @@ def run_manim(code: str, preview: bool = False, quality: str = "720p", fmt: str 
         cmd = [
             "manim", quality_flag,
             "--fps", fps,
+            "--resolution", resolution_val,
             "--format", manim_fmt,
             "--media_dir", str(MEDIA_DIR),
             "--progress_bar", "none",

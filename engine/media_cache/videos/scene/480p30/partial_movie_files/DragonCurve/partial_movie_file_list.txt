@@ -1,0 +1,12 @@
+# This file is used internally by FFMPEG.
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/DragonCurve/1180590918_828915861_223132457.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/DragonCurve/3448418337_1208532083_3446919433.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/DragonCurve/3448418337_160516573_2244465335.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/DragonCurve/3448418337_1006857060_826789855.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/DragonCurve/3448418337_160516573_2779454900.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/DragonCurve/3448418337_1908098984_2128707341.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/DragonCurve/3448418337_160516573_2364215040.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/DragonCurve/3448418337_3008917347_570976678.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/DragonCurve/3448418337_160516573_2045916542.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/DragonCurve/3448418337_310540274_1487678501.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/DragonCurve/3448418337_903645535_379711444.mp4'

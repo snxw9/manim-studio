@@ -47,6 +47,9 @@ export default function Home() {
   const [selectedApi, setSelectedApi] = useState("auto");
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
+  // Monaco editor ref
+  const editorRef = useRef<any>(null);
+
   // Render timer state
   const [elapsed, setElapsed] = useState(0);
   const [renderTime, setRenderTime] = useState<number | null>(null);
@@ -98,12 +101,22 @@ export default function Home() {
   };
 
   const handleRender = async () => {
-    if (!generatedCode?.trim()) return;
-    setIsRendering(true);
+    const code = editorRef.current?.getValue() || generatedCode;
+    console.log('[render] code length:', code?.length, 'first 100:', code?.slice(0, 100));
+
+    if (!code?.trim()) return;
+
+    // Clear previous render completely
+    if (videoUrl) {
+      URL.revokeObjectURL(videoUrl);
+    }
+    setVideoUrl(null);
+    setVideoFilename(null);
     setError(null);
     setRenderTime(null);
     setElapsed(0);
     
+    setIsRendering(true);
     const startTime = Date.now();
     timerRef.current = setInterval(() => {
       setElapsed(Math.floor((Date.now() - startTime) / 1000));
@@ -123,7 +136,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          code: generatedCode, 
+          code: code, 
           quality: qualityValue,
           format: format || 'mp4'
         }),
@@ -258,7 +271,11 @@ export default function Home() {
                 {leftPanel === "prompt" ? (
                   <PromptInput onSubmit={handleGenerate} isGenerating={isGenerating} />
                 ) : (
-                  <CodeEditor code={generatedCode} onChange={setGeneratedCode} />
+                  <CodeEditor 
+                    code={generatedCode} 
+                    onChange={setGeneratedCode} 
+                    onMount={(editor) => { editorRef.current = editor; }}
+                  />
                 )}
               </div>
             </div>

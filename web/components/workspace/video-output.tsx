@@ -125,10 +125,10 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
         <div
           className="relative bg-[#0a0a0a] rounded-lg overflow-hidden border border-orange-500/10 shadow-xl flex items-center justify-center"
           style={{
-            ...ASPECT_RATIO_STYLE[aspectRatio],
+            aspectRatio: "16 / 9",
             maxWidth: "100%",
             maxHeight: "100%",
-            width: aspectRatio === "9:16" ? "auto" : "100%",
+            width: "100%",
           }}
         >
           {!videoUrl ? (
@@ -144,6 +144,9 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
             <video
               ref={videoRef}
               src={videoUrl}
+              autoPlay
+              muted
+              loop
               className="w-full h-full object-contain"
               onTimeUpdate={onTimeUpdate}
               onLoadedMetadata={onLoadedMetadata}
