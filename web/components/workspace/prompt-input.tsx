@@ -109,15 +109,15 @@ export function PromptInput({ onSubmit, isGenerating }: PromptInputProps) {
               onBlur={() => setFocused(false)}
               onKeyDown={handleKeyDown}
               disabled={isGenerating}
-              placeholder={isGenerating ? "Generating code..." : "e.g. 'Animate a 2D linear transformation on a vector grid'"}
-              className="flex-1 bg-transparent border-none outline-none text-sm text-foreground placeholder:text-muted-foreground resize-none leading-relaxed disabled:opacity-50"
+              placeholder="e.g. 'Animate a 2D linear transformation on a vector grid'"
+              className="flex-1 bg-transparent border-none outline-none text-sm text-foreground placeholder:text-muted-foreground resize-none leading-relaxed"
               data-testid="input-prompt"
             />
           </div>
 
           <div className="flex items-center justify-between px-3 pb-2.5">
             <p className="text-[11px] text-muted-foreground/50">
-              {isGenerating ? "AI is working..." : "Press Enter to generate · Shift+Enter for new line"}
+              {isGenerating ? "Generating code..." : "Press Enter to generate · Shift+Enter for new line"}
             </p>
             <Button
               size="icon"
@@ -126,7 +126,11 @@ export function PromptInput({ onSubmit, isGenerating }: PromptInputProps) {
               className="h-8 w-8 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-30 shrink-0 shadow-sm"
               data-testid="button-send-prompt"
             >
-              {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+              {isGenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowUp className="h-4 w-4" />
+              )}
             </Button>
           </div>
         </div>
@@ -156,8 +160,7 @@ export function PromptInput({ onSubmit, isGenerating }: PromptInputProps) {
               <button
                 key={`${batchIndex}-${i}`}
                 onClick={() => setValue(s)}
-                disabled={isGenerating}
-                className="text-left text-[12px] text-muted-foreground hover:text-primary bg-muted/40 hover:bg-primary/10 border border-border/60 hover:border-primary/40 rounded-xl px-3 py-2.5 transition-colors cursor-pointer leading-snug disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-left text-[12px] text-muted-foreground hover:text-primary bg-muted/40 hover:bg-primary/10 border border-border/60 hover:border-primary/40 rounded-xl px-3 py-2.5 transition-colors cursor-pointer leading-snug"
                 data-testid={`button-suggestion-${i}`}
               >
                 {s}

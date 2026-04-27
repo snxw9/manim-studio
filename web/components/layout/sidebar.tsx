@@ -55,8 +55,6 @@ const CATEGORIES: Category[] = [
     icon: <Sparkles className="h-3.5 w-3.5" />, color: "text-sky-500",
     templates: [
       { name: "Fourier Series",   desc: "Rotating phasors → waveform" },
-      { name: "Fourier Transform",desc: "Time-domain to frequency-domain" },
-      { name: "Laplace Transform",desc: "s-plane pole-zero plot" },
       { name: "Cycloid Trace",    desc: "Point on a rolling circle" },
     ],
   },
@@ -67,7 +65,6 @@ const CATEGORIES: Category[] = [
       { name: "Koch Snowflake",   desc: "Recursive edge subdivision" },
       { name: "Sierpiński Triangle", desc: "Self-similar triangle recursion" },
       { name: "Dragon Curve",     desc: "L-system paper-fold fractal" },
-      { name: "Julia Set",        desc: "Complex z² + c iteration" },
     ],
   },
   {
@@ -203,7 +200,7 @@ const PALETTE_ASSETS: { name: string; colors: string[] }[] = [
 /* ─── Sidebar ────────────────────────────────────────────── */
 
 interface SidebarProps {
-  onTemplateClick?: (id: string) => void;
+  onTemplateClick?: (templateKey: string) => void;
 }
 
 export function Sidebar({ onTemplateClick }: SidebarProps) {
@@ -254,7 +251,7 @@ export function Sidebar({ onTemplateClick }: SidebarProps) {
                   {category.templates.map((tpl, i) => (
                     <div
                       key={i}
-                      onClick={() => onTemplateClick?.(category.name)}
+                      onClick={() => onTemplateClick?.(tpl.name)}
                       className="group flex items-start gap-2.5 py-2 px-2.5 rounded-xl hover:bg-accent cursor-pointer transition-colors"
                       data-testid={`template-${category.id}-${i}`}
                     >

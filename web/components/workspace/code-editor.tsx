@@ -2,19 +2,9 @@ import Editor from "@monaco-editor/react";
 import { Terminal, Code2, CheckCircle, Clock } from "lucide-react";
 import { useTheme } from "@/app/providers";
 
-const INITIAL_CODE = `# Manim Animation Code
-from manim import *
-
-class MyAnimation(Scene):
-    def construct(self):
-        text = Text("Hello Manim!")
-        self.play(Write(text))
-        self.wait(1)
-`;
-
 interface CodeEditorProps {
-  code?: string;
-  onChange?: (code: string) => void;
+  code: string;
+  onChange: (code: string) => void;
 }
 
 export function CodeEditor({ code, onChange }: CodeEditorProps) {
@@ -28,7 +18,7 @@ export function CodeEditor({ code, onChange }: CodeEditorProps) {
           <span>Editor</span>
         </div>
         <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-          <span className="font-mono bg-muted px-2 py-0.5 rounded-md">Python (Manim)</span>
+          <span className="font-mono bg-muted px-2 py-0.5 rounded-md">Python</span>
         </div>
       </div>
 
@@ -36,8 +26,8 @@ export function CodeEditor({ code, onChange }: CodeEditorProps) {
         <Editor
           height="100%"
           defaultLanguage="python"
-          value={code || INITIAL_CODE}
-          onChange={(v) => onChange?.(v || "")}
+          value={code}
+          onChange={(v) => onChange(v || "")}
           theme={theme === "dark" ? "vs-dark" : "light"}
           options={{
             minimap: { enabled: false },
@@ -71,7 +61,7 @@ export function CodeEditor({ code, onChange }: CodeEditorProps) {
             <Clock className="h-3 w-3" />
             <span>Manim Engine initialized.</span>
           </div>
-          <div className="text-muted-foreground/50">Ready to render.</div>
+          <div className="text-muted-foreground/50">Waiting for changes...</div>
         </div>
       </div>
     </div>

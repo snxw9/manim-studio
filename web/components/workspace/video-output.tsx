@@ -37,26 +37,20 @@ function secondsToTimecode(s: number): string {
 
 export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, videoFilename }: VideoOutputProps) {
   const [playing, setPlaying] = useState(false);
-  const [sliderValue, setSliderValue] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
-
   const quality = QUALITY_LABEL[resolution][frameRate];
 
   useEffect(() => {
     if (videoUrl && videoRef.current) {
       videoRef.current.load();
-      setSliderValue(0);
-      setCurrentTimeSec(0);
+      setPlaying(false);
     }
   }, [videoUrl]);
 
   const togglePlay = () => {
-    if (!videoRef.current) {
-      setPlaying(!playing);
-      return;
-    }
+    if (!videoRef.current) return;
     if (playing) {
       videoRef.current.pause();
     } else {
@@ -67,10 +61,7 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
 
   const onTimeUpdate = () => {
     if (videoRef.current) {
-      const current = videoRef.current.currentTime;
-      const dur = videoRef.current.duration;
-      setCurrentTimeSec(current);
-      setSliderValue((current / dur) * 100);
+      setCurrentTime(videoRef.current.currentTime);
     }
   };
 
@@ -80,24 +71,23 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
     }
   };
 
-  const onSliderChange = (val: number) => {
-    setSliderValue(val);
-    if (videoRef.current && duration) {
-      videoRef.current.currentTime = (val / 100) * duration;
+  const handleSliderChange = (val: number[]) => {
+    if (videoRef.current) {
+      const time = (val[0] / 100) * duration;
+      videoRef.current.currentTime = time;
+      setCurrentTime(time);
     }
   };
 
   const handleDownload = () => {
-    if (videoUrl) {
-      const a = document.createElement('a');
-      a.href = videoUrl;
-      a.download = videoFilename || 'animation.mp4';
-      a.click();
-    }
+    if (!videoUrl) return;
+    const a = document.createElement('a');
+    a.href = videoUrl;
+    a.download = videoFilename || 'animation.mp4';
+    a.click();
   };
 
-  const currentTimeDisplay = secondsToTimecode(currentTimeSec);
-  const totalTimeDisplay = secondsToTimecode(duration || 60);
+  const sliderValue = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <div className="flex flex-col h-full w-full relative">
@@ -141,16 +131,7 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
             width: aspectRatio === "9:16" ? "auto" : "100%",
           }}
         >
-          {videoUrl ? (
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              className="w-full h-full object-contain"
-              onTimeUpdate={onTimeUpdate}
-              onLoadedMetadata={onLoadedMetadata}
-              onEnded={() => setPlaying(false)}
-            />
-          ) : (
+          {!videoUrl ? (
             <div className="relative flex items-center justify-center w-36 h-36">
               <div className="absolute w-36 h-36 rounded-full border border-orange-500/30" style={{ animation: "spin 18s linear infinite" }} />
               <div className="absolute w-24 h-24 rounded-full border border-orange-400/20" style={{ transform: "scaleY(0.5)", animation: "spin 12s linear infinite reverse" }} />
@@ -159,11 +140,21 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
               <div className="absolute w-6 h-6 bg-orange-400/60 blur-md rounded-full" />
               <div className="absolute w-2.5 h-2.5 bg-orange-400 rounded-full" style={{ boxShadow: "0 0 12px 4px rgba(249,115,22,0.6)" }} />
             </div>
+          ) : (
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              className="w-full h-full object-contain"
+              onTimeUpdate={onTimeUpdate}
+              onLoadedMetadata={onLoadedMetadata}
+              onClick={togglePlay}
+              onEnded={() => setPlaying(false)}
+            />
           )}
 
           {/* Timecode overlay */}
           <div className="absolute top-2.5 right-2.5 font-mono text-[10px] text-white/50 bg-black/60 px-2 py-0.5 rounded-md backdrop-blur-sm border border-white/10">
-            {currentTimeDisplay.padStart(4, "0")}
+            {secondsToTimecode(currentTime).padStart(4, "0")}
           </div>
 
           {/* Aspect ratio label */}
@@ -172,12 +163,10 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
           </div>
 
           {/* Preview pill */}
-          {!videoUrl && (
-            <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 text-[10px] text-orange-400/80 bg-black/60 px-2 py-0.5 rounded-md backdrop-blur-sm border border-orange-500/20">
-              <div className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />
-              Preview
-            </div>
-          )}
+          <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 text-[10px] text-orange-400/80 bg-black/60 px-2 py-0.5 rounded-md backdrop-blur-sm border border-orange-500/20">
+            <div className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />
+            {videoUrl ? "Output" : "Idle"}
+          </div>
         </div>
       </div>
 
@@ -185,18 +174,18 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
       <div className="border-t border-border bg-card shrink-0 px-3 py-2.5 flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-mono text-muted-foreground w-8 text-right tabular-nums">
-            {currentTimeDisplay}
+            {secondsToTimecode(currentTime)}
           </span>
           <Slider
             value={[sliderValue]}
-            onValueChange={([v]) => onSliderChange(v)}
+            onValueChange={handleSliderChange}
             max={100}
             step={0.1}
             className="flex-1"
             data-testid="slider-timeline"
           />
           <span className="text-[10px] font-mono text-muted-foreground w-8 tabular-nums">
-            {totalTimeDisplay}
+            {secondsToTimecode(duration)}
           </span>
         </div>
 
@@ -205,7 +194,7 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
             <Button
               variant="ghost" size="icon"
               className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
-              onClick={() => onSliderChange(0)}
+              onClick={() => { if(videoRef.current) videoRef.current.currentTime = 0; }}
               data-testid="button-skip-back"
             >
               <SkipBack className="h-3.5 w-3.5" />
@@ -221,7 +210,7 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
             <Button
               variant="ghost" size="icon"
               className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
-              onClick={() => onSliderChange(100)}
+              onClick={() => { if(videoRef.current) videoRef.current.currentTime = duration; }}
               data-testid="button-skip-forward"
             >
               <SkipForward className="h-3.5 w-3.5" />
@@ -229,16 +218,16 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
           </div>
 
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground" data-testid="button-fullscreen">
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground" data-testid="button-fullscreen" onClick={() => videoRef.current?.requestFullscreen()}>
               <Maximize className="h-3.5 w-3.5" />
             </Button>
             <Button 
               variant="outline" 
               size="sm" 
+              disabled={!videoUrl}
+              onClick={handleDownload}
               className="h-7 gap-1.5 text-[11px] font-semibold rounded-lg" 
               data-testid="button-export"
-              onClick={handleDownload}
-              disabled={!videoUrl}
             >
               <Download className="h-3 w-3" />
               Export

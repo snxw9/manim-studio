@@ -251,20 +251,13 @@ class DescriptiveName(Scene):
     def construct(self):
         # code here
 
-QUALITY RULES:
-- Create visually meaningful, well-structured animations
-- Use smooth transitions and proper pacing
-- Add titles and labels to explain what is being shown
-- For conceptual topics (waterfall model, algorithms, processes)
-  use proper diagrams with labeled stages, arrows, and flow
-- Use color meaningfully — different colors for different concepts
-- Animate things in logical sequence — build up the scene gradually
-
-PERFORMANCE RULES (only these are hard limits):
-- Do not create more than 25 distinct mobject variables
-- Do not use self.wait() for more than 3 seconds at a time
-- Do not attempt physics simulations or particle systems
-- Keep total scene duration under 45 seconds
+QUALITY STANDARDS:
+- Every animation must have a clear title
+- Use color meaningfully — different colors for different concepts  
+- Animate progressively — build up the scene step by step
+- Label all mathematical objects clearly
+- End scenes cleanly with FadeOut
+- Match the complexity the user requests — if they want something detailed, make it detailed
 
 WHAT TO DO FOR COMMON REQUESTS:
 - "waterfall model" = software development phases in labeled boxes

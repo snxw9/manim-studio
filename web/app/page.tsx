@@ -45,6 +45,7 @@ export default function Home() {
   const [videoFilename, setVideoFilename] = useState<string | null>(null);
   const [engineOnline, setEngineOnline] = useState(false);
   const [selectedApi, setSelectedApi] = useState("auto");
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
   // Render timer state
   const [elapsed, setElapsed] = useState(0);
@@ -151,13 +152,48 @@ export default function Home() {
     }
   };
 
-  const handleTemplateClick = (templateKey: string) => {
-    const key = templateKey.toLowerCase().replace(/\s+/g, '_');
-    const template = BUILTIN_TEMPLATES[key];
-    if (template) {
-      setGeneratedCode(template.code);
-      setLeftPanel("editor");
-    }
+  const handleTemplateClick = (templateName: string) => {
+    // Map display names to template IDs
+    const nameToId: Record<string, string> = {
+      // Geometry
+      'Circle & Arcs':    'circle_and_arcs',
+      'Polygon Morph':    'polygon_morph',
+      '3D Axes Scene':    'three_d_axes',
+      'Angle Bisector':   'angle_bisector',
+      // Calculus
+      'Riemann Sums':     'riemann_sums',
+      'Taylor Series':    'taylor_series',
+      'Derivative Slope': 'derivative_slope',
+      'Arc Length Sweep': 'arc_length_sweep',
+      // Linear Algebra
+      'Matrix Transform': 'matrix_transform',
+      'Eigenvectors':     'eigenvectors',
+      'Dot Product':      'dot_product',
+      'Gram–Schmidt':     'gram_schmidt',
+      'Gram-Schmidt':     'gram_schmidt',
+      // Transforms
+      'Fourier Series':   'fourier_series',
+      'Cycloid Trace':    'cycloid_trace',
+      // Fractals
+      'Koch Snowflake':     'koch_snowflake',
+      'Sierpiński Triangle':'sierpinski_triangle',
+      'Dragon Curve':       'dragon_curve',
+      // Number Theory
+      'Sieve of Eratosthenes': 'sieve_eratosthenes',
+      'Prime Ulam Spiral':     'prime_ulam_spiral',
+      'Collatz Sequence':      'collatz_sequence',
+      'GCD Euclidean':         'gcd_euclidean',
+    };
+
+    const id = nameToId[templateName];
+    if (!id) return;
+
+    const template = BUILTIN_TEMPLATES[id];
+    if (!template) return;
+
+    setGeneratedCode(template.code);
+    setLeftPanel("editor");
+    setSelectedTemplate(templateName);
   };
 
   const settings: RenderSettings = {

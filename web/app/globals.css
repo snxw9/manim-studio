@@ -69,6 +69,7 @@
 
 /* LIGHT MODE — warm whites, orange accent */
 :root {
+  transition: background-color 0.5s ease, color 0.5s ease, border-color 0.5s ease;
   --button-outline: rgba(0,0,0, .10);
   --badge-outline: rgba(0,0,0, .05);
   --opaque-button-border-intensity: -8;
@@ -190,6 +191,7 @@
 @layer base {
   * {
     @apply border-border;
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
   }
 
   body {
