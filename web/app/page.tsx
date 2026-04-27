@@ -10,6 +10,17 @@ import { ApiSettings } from "@/components/workspace/api-settings";
 import { Sparkles, Code2 } from "lucide-react";
 import { BUILTIN_TEMPLATES } from "@/lib/builtinTemplates";
 
+// Module-level code store — never stale, never affected by closures
+let _currentCode = '';
+
+export function setCurrentCode(code: string) {
+  _currentCode = code;
+}
+
+export function getCurrentCode(): string {
+  return _currentCode;
+}
+
 export type Resolution  = "360p" | "720p" | "1080p" | "2k" | "4k";
 export type FrameRate   = "24fps" | "30fps" | "60fps" | "120fps";
 export type Format      = "mp4" | "mkv" | "gif" | "webm";
@@ -49,12 +60,18 @@ export default function Home() {
 
   // Monaco editor refs
   const editorRef = useRef<any>(null);
-  const latestCodeRef = useRef<string>("");
 
   // Render timer state
   const [elapsed, setElapsed] = useState(0);
   const [renderTime, setRenderTime] = useState<number | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Initialize module-level store
+  useEffect(() => {
+    if (generatedCode) {
+      _currentCode = generatedCode;
+    }
+  }, []);
 
   // Health check
   useEffect(() => {
@@ -89,8 +106,8 @@ export default function Home() {
       });
       const data = await res.json();
       if (data.code) {
+        _currentCode = data.code;
         setGeneratedCode(data.code);
-        latestCodeRef.current = data.code;
         if (editorRef.current) editorRef.current.setValue(data.code);
         setLeftPanel("editor");
       } else {
@@ -104,13 +121,14 @@ export default function Home() {
   };
 
   const handleRender = async () => {
-    // ALWAYS get fresh code from ref — never from stale state
-    const code = latestCodeRef.current || editorRef.current?.getValue() || generatedCode;
-    console.log('[render] Sending code, first line:', code.split('\n')[0]);
+    // Read from module-level variable — NEVER stale
+    const code = _currentCode;
+    
+    console.log('[render] Code class name:', code.match(/class\s+(\w+)/)?.[1]);
     console.log('[render] Code length:', code.length);
 
     if (!code?.trim()) {
-      console.warn('[render] No code to render');
+      alert('No code to render. Select a template or write code first.');
       return;
     }
 
@@ -214,6 +232,9 @@ export default function Home() {
 
     const code = template.code;
 
+    // Update module-level store FIRST
+    _currentCode = code;
+
     // Clear stale state visually
     if (videoUrl) {
       URL.revokeObjectURL(videoUrl);
@@ -224,13 +245,15 @@ export default function Home() {
 
     // Update state AND Monaco directly
     setGeneratedCode(code);
-    latestCodeRef.current = code;
     if (editorRef.current) {
       editorRef.current.setValue(code);
     }
 
     setLeftPanel("editor");
     setSelectedTemplate(templateName);
+
+    console.log('[template] Set code for:', templateName);
+    console.log('[template] Class name in code:', code.match(/class\s+(\w+)/)?.[1]);
   };
 
   const settings: RenderSettings = {
@@ -298,12 +321,12 @@ export default function Home() {
                   <CodeEditor 
                     code={generatedCode} 
                     onChange={(val) => {
+                      _currentCode = val;
                       setGeneratedCode(val);
-                      latestCodeRef.current = val;
                     }} 
                     onMount={(editor) => { 
                       editorRef.current = editor;
-                      latestCodeRef.current = editor.getValue();
+                      _currentCode = editor.getValue();
                     }}
                   />
                 )}
