@@ -1,5 +1,0 @@
-# This file is used internally by FFMPEG.
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene_f98fd1be4863/720p30/partial_movie_files/Snowflake/1987512680_2596714266_223132457.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene_f98fd1be4863/720p30/partial_movie_files/Snowflake/2538612922_2688965532_1654927752.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene_f98fd1be4863/720p30/partial_movie_files/Snowflake/2538612922_249490772_1461525621.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene_f98fd1be4863/720p30/partial_movie_files/Snowflake/2538612922_2688965532_926160986.mp4'

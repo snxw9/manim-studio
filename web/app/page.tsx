@@ -8,7 +8,6 @@ import { CodeEditor } from "@/components/workspace/code-editor";
 import { VideoOutput } from "@/components/workspace/video-output";
 import { ApiSettings } from "@/components/workspace/api-settings";
 import { Sparkles, Code2 } from "lucide-react";
-import { BUILTIN_TEMPLATES } from "@/lib/builtinTemplates";
 
 // Module-level code store — never stale, never affected by closures
 let _currentCode = '';
@@ -48,7 +47,7 @@ export default function Home() {
   const [format,      setFormat]      = useState<Format>("mp4");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("16:9");
 
-  const [generatedCode, setGeneratedCode] = useState<string>("");
+  const [generatedCode, setGeneratedCode] = useState<string>(" ");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +55,6 @@ export default function Home() {
   const [videoFilename, setVideoFilename] = useState<string | null>(null);
   const [engineOnline, setEngineOnline] = useState(false);
   const [selectedApi, setSelectedApi] = useState("auto");
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
   // Monaco editor refs
   const editorRef = useRef<any>(null);
@@ -191,49 +189,10 @@ export default function Home() {
     }
   };
 
-  const handleTemplateClick = (templateName: string) => {
-    console.log('[template] Received:', JSON.stringify(templateName));
-
-    const normalize = (s: string) =>
-      s.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    const normalizedInput = normalize(templateName);
-
-    const match = Object.values(BUILTIN_TEMPLATES).find(
-      (t) =>
-        normalize(t.name) === normalizedInput ||
-        normalize(t.id) === normalizedInput ||
-        normalizedInput.includes(normalize(t.name)) ||
-        normalize(t.name).includes(normalizedInput)
-    );
-
-    if (!match) {
-      console.warn('[template] No match for:', JSON.stringify(templateName));
-      console.warn('[template] Available:', Object.values(BUILTIN_TEMPLATES).map(t => t.name));
-      return;
-    }
-
-    console.log('[template] Matched:', match.name, '->', match.id);
-    console.log('[template] Class:', match.code.match(/class\s+(\w+)/)?.[1]);
-
-    _currentCode = match.code;
-
-    if (editorRef.current) {
-      editorRef.current.setValue(match.code);
-    }
-
-    setGeneratedCode(match.code);
-
-    if (videoUrl) {
-      URL.revokeObjectURL(videoUrl);
-      setVideoUrl(null);
-      setVideoFilename(null);
-    }
-
-    setError(null);
-    setSelectedTemplate(templateName);
-    setLeftPanel("editor");
+  const handleTemplateClick = (name: string) => {
+    console.log('Template clicked:', name, '(templates not yet implemented)');
   };
+
 
   const settings: RenderSettings = {
     resolution, frameRate, format, aspectRatio,
@@ -271,8 +230,8 @@ export default function Home() {
                   onClick={() => setLeftPanel("prompt")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-t-lg border-b-2 transition-colors mb-[-1px] ${
                     leftPanel === "prompt"
-                      ? "border-primary text-primary bg-primary/5"
-                      : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                   data-testid="tab-prompt"
                 >
@@ -283,8 +242,8 @@ export default function Home() {
                   onClick={() => setLeftPanel("editor")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-t-lg border-b-2 transition-colors mb-[-1px] ${
                     leftPanel === "editor"
-                      ? "border-primary text-primary bg-primary/5"
-                      : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                      ? "border-primary text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                   data-testid="tab-editor"
                 >

@@ -1,30 +1,19 @@
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
 import os
 import hashlib
-import base64
-import glob
-import re
-import subprocess
-import tempfile
-import shutil
-import asyncio
 from collections import defaultdict
 from datetime import date
 from dotenv import load_dotenv
-from ai.model_router import generate_with_fallback, select_tier
-from renderer.manim_runner import run_manim, cleanup_previews, pre_validate, render_scene
-from renderer.preview_renderer import render_preview
-from renderer.code_validator import validate_manim_code
-from templates.library import get_template, list_templates
-from templates.assets import get_asset, list_assets, get_assets_by_category
-
-import sys
 from pathlib import Path
+
+from ai.model_router import generate_with_fallback, select_tier
+from renderer.manim_runner import pre_validate, render_scene
+from templates.library import list_templates
+from templates.assets import list_assets
 
 # Load .env from root directory
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -40,11 +29,8 @@ def startup_check():
         issues.append("manim not installed — run: pip install manim")
     
     # Check API keys
-    from dotenv import load_dotenv
-    load_dotenv()
-    
     if not os.getenv("GROQ_API_KEY") and not os.getenv("GEMINI_API_KEY") and not os.getenv("OPENAI_API_KEY"):
-        issues.append("No API keys found in engine/.env — AI generation will fail")
+        issues.append("No API keys found in .env — AI generation will fail")
     
     # Check output dirs exist
     Path("outputs").mkdir(exist_ok=True)
@@ -57,15 +43,6 @@ def startup_check():
         print()
 
 startup_check()
-
-# Persistent dirs — survive between renders
-MEDIA_DIR = Path(__file__).parent / "media_cache"
-OUTPUTS_DIR = Path(__file__).parent / "outputs"
-LATEX_CACHE = MEDIA_DIR / "Tex"
-
-MEDIA_DIR.mkdir(exist_ok=True)
-OUTPUTS_DIR.mkdir(exist_ok=True)
-LATEX_CACHE.mkdir(exist_ok=True)
 
 app = FastAPI(title="Manim Studio Engine API")
 
@@ -82,10 +59,6 @@ app.add_middleware(
 OUTPUT_DIR_PATH = os.path.abspath(os.getenv("MANIM_OUTPUT_DIR", "./outputs"))
 os.makedirs(OUTPUT_DIR_PATH, exist_ok=True)
 app.mount("/outputs", StaticFiles(directory=OUTPUT_DIR_PATH), name="outputs")
-
-# Persistent media cache for LaTeX and partial renders
-MEDIA_CACHE = os.path.abspath(os.path.join(os.path.dirname(__file__), "media_cache"))
-os.makedirs(MEDIA_CACHE, exist_ok=True)
 
 # In-memory store: device_id -> {date, count}
 _usage: dict[str, dict] = defaultdict(lambda: {"date": None, "count": 0})
@@ -118,61 +91,12 @@ def increment_usage(device_id: str):
 class GenerateRequest(BaseModel):
     prompt: str
     template: str | None = None
-    user_keys: dict | None = None  # Optional user-provided API keys
+    user_keys: dict | None = None
 
 class RenderRequest(BaseModel):
     code: str
-    is_preview: bool = False
     quality: str = "720p"
     format: str = "mp4"
-
-class PreviewRequest(BaseModel):
-    code: str
-
-@app.post("/render/cancel")
-async def cancel_render(request: Request):
-    # Process management simplified — reload handles restart
-    return {"cancelled": False}
-
-from ai.provider_pool import get_pool
-
-@app.get("/pool/status")
-async def pool_status():
-    """Shows current provider rotation state — useful for debugging."""
-    return get_pool().status()
-
-@app.get("/render/estimates")
-async def render_estimates():
-    return {
-        "estimates": {
-            "480p":  { "label": "Low",  "seconds": 30,  "range": "15–60s",   "use": "Quick preview" },
-            "720p":  { "label": "Mid",  "seconds": 90,  "range": "30–120s",  "use": "Standard export" },
-            "1080p": { "label": "High", "seconds": 180, "range": "60–240s",  "use": "Final quality" },
-            "2160p": { "label": "4K",   "seconds": 420, "range": "4–8 min",  "use": "Maximum quality" },
-        }
-    }
-
-@app.get("/templates")
-async def get_templates():
-    return {"templates": list_templates()}
-
-@app.get("/templates/{template_id}")
-async def get_template_code(template_id: str):
-    template = get_template(template_id)
-    if not template:
-        raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
-    return template
-
-@app.get("/assets")
-async def get_assets():
-    return {"assets": list_assets(), "by_category": get_assets_by_category()}
-
-@app.get("/assets/{asset_id}")
-async def get_asset_snippet(asset_id: str):
-    asset = get_asset(asset_id)
-    if not asset:
-        raise HTTPException(status_code=404, detail=f"Asset '{asset_id}' not found")
-    return asset
 
 @app.get("/health")
 async def health():
@@ -180,8 +104,6 @@ async def health():
 
 @app.post("/generate")
 async def generate_code(request: GenerateRequest, http_request: Request):
-    print(f"[generate] prompt='{request.prompt[:80]}' keys={list((request.user_keys or {}).keys())}")
-    
     if not request.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt is empty")
     
@@ -210,8 +132,6 @@ async def generate_code(request: GenerateRequest, http_request: Request):
             user_keys
         )
         
-        print(f"[generate] result keys: {list(result.keys())}")
-        
         if "error" in result and "code" not in result:
             if "Free limit reached" in result["error"]:
                 raise HTTPException(status_code=429, detail={
@@ -238,22 +158,6 @@ async def generate_code(request: GenerateRequest, http_request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[generate] exception: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/preview")
-async def preview(request: PreviewRequest):
-    if not request.code or not request.code.strip():
-        raise HTTPException(status_code=400, detail="No code provided")
-    try:
-        import asyncio
-        result = await asyncio.to_thread(render_preview, request.code)
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/render")
@@ -277,10 +181,23 @@ async def render_code(request: RenderRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/cleanup")
-async def cleanup(request: Request):
-    # Simplified cleanup
-    return {"status": "success"}
+from ai.provider_pool import get_pool
+
+@app.get("/pool/status")
+async def pool_status():
+    return get_pool().status()
+
+@app.post("/render/cancel")
+async def cancel_render(request: Request):
+    return {"cancelled": False}
+
+@app.get("/templates")
+async def get_templates():
+    return {"templates": list_templates()}
+
+@app.get("/assets")
+async def get_assets():
+    return {"assets": list_assets()}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

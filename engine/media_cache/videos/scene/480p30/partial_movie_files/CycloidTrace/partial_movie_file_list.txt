@@ -1,8 +1,0 @@
-# This file is used internally by FFMPEG.
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/CycloidTrace/1180590918_3917836368_223132457.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/CycloidTrace/3448418337_1658296031_3927239280.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/CycloidTrace/3448418337_95173422_200375118.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/CycloidTrace/3448418337_2178769394_3744478972.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/CycloidTrace/3448418337_2797018163_3432850372.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/CycloidTrace/3448418337_2987716018_2475767512.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/CycloidTrace/3448418337_818967432_165431468.mp4'

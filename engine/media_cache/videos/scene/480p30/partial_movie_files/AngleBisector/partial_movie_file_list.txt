@@ -1,9 +1,0 @@
-# This file is used internally by FFMPEG.
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/AngleBisector/1180590918_1317194148_223132457.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/AngleBisector/3448418337_989638709_277335582.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/AngleBisector/3448418337_3503012118_1914139012.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/AngleBisector/3448418337_2574473371_1895612506.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/AngleBisector/3448418337_3502550168_2257372994.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/AngleBisector/3448418337_3751205083_3841203104.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/AngleBisector/3448418337_2872842549_3333235232.mp4'
-file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/480p30/partial_movie_files/AngleBisector/3448418337_2754040823_2956998989.mp4'
