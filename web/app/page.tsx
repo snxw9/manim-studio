@@ -147,6 +147,14 @@ export default function Home() {
   };
 
   const handleRender = async () => {
+    // Clear video immediately so user sees rendering state
+    // not the previous video while waiting
+    if (videoUrl) {
+      URL.revokeObjectURL(videoUrl);
+    }
+    setVideoUrl(null);
+    setVideoFilename(null);
+
     // Read from module-level variable — NEVER stale
     const code = _currentCode;
     
@@ -158,8 +166,6 @@ export default function Home() {
       return;
     }
 
-    // Clear previous render completely
-    clearVideo();
     setError(null);
     setRenderTime(null);
     setElapsed(0);
@@ -335,6 +341,8 @@ export default function Home() {
                 videoUrl={videoUrl}
                 videoFilename={videoFilename}
                 onClear={clearVideo}
+                isRendering={isRendering}
+                elapsed={elapsed}
               />
             </div>
           </div>

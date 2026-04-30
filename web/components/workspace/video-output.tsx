@@ -12,6 +12,8 @@ interface VideoOutputProps {
   videoUrl?: string | null;
   videoFilename?: string | null;
   onClear?: () => void;
+  isRendering?: boolean;
+  elapsed?: number;
 }
 
 const ASPECT_RATIO_STYLE: Record<AspectRatio, React.CSSProperties> = {
@@ -36,7 +38,7 @@ function secondsToTimecode(s: number): string {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, videoFilename, onClear }: VideoOutputProps) {
+export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, videoFilename, onClear, isRendering, elapsed = 0 }: VideoOutputProps) {
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -143,7 +145,14 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
             width: "100%",
           }}
         >
-          {!videoUrl ? (
+          {isRendering && !videoUrl && (
+            <div className="flex flex-col items-center justify-center h-full gap-2 z-10 bg-black/40 backdrop-blur-sm w-full">
+              <div className="text-xs font-mono text-orange-400 animate-pulse">Rendering...</div>
+              <div className="text-[10px] font-mono text-muted-foreground">{elapsed}s elapsed</div>
+            </div>
+          )}
+
+          {!videoUrl && !isRendering ? (
             <div className="relative flex items-center justify-center w-36 h-36">
               <div className="absolute w-36 h-36 rounded-full border border-orange-500/30" style={{ animation: "spin 18s linear infinite" }} />
               <div className="absolute w-24 h-24 rounded-full border border-orange-400/20" style={{ transform: "scaleY(0.5)", animation: "spin 12s linear infinite reverse" }} />
@@ -152,7 +161,7 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
               <div className="absolute w-6 h-6 bg-orange-400/60 blur-md rounded-full" />
               <div className="absolute w-2.5 h-2.5 bg-orange-400 rounded-full" style={{ boxShadow: "0 0 12px 4px rgba(249,115,22,0.6)" }} />
             </div>
-          ) : (
+          ) : videoUrl ? (
             <video
               key={videoUrl}
               ref={videoRef}
@@ -171,7 +180,7 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
                 }
               }}
             />
-          )}
+          ) : null}
 
           {/* Timecode overlay */}
           <div className="absolute top-2.5 right-2.5 font-mono text-[10px] text-white/50 bg-black/60 px-2 py-0.5 rounded-md backdrop-blur-sm border border-white/10">
@@ -186,7 +195,7 @@ export function VideoOutput({ resolution, frameRate, aspectRatio, videoUrl, vide
           {/* Preview pill */}
           <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 text-[10px] text-orange-400/80 bg-black/60 px-2 py-0.5 rounded-md backdrop-blur-sm border border-orange-500/20">
             <div className="h-1.5 w-1.5 rounded-full bg-orange-400 animate-pulse" />
-            {videoUrl ? "Output" : "Idle"}
+            {videoUrl ? "Output" : isRendering ? "Rendering" : "Idle"}
           </div>
         </div>
       </div>
