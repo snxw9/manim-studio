@@ -6,78 +6,7 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-
-/* ─── Templates (Manim-accurate) ────────────────────────── */
-
-type Template = { name: string; desc: string };
-
-type Category = {
-  id: string;
-  name: string;
-  icon: React.ReactNode;
-  color: string;
-  templates: Template[];
-};
-
-const CATEGORIES: Category[] = [
-  {
-    id: "geometry", name: "Geometry",
-    icon: <Shapes className="h-3.5 w-3.5" />, color: "text-orange-500",
-    templates: [
-      { name: "Circle & Arcs",    desc: "Arc, AnnularSector, Dot" },
-      { name: "Polygon Morph",    desc: "Transform square → circle" },
-      { name: "3D Axes Scene",    desc: "ThreeDScene with Surface" },
-      { name: "Angle Bisector",   desc: "Angle, RightAngle, Arc" },
-    ],
-  },
-  {
-    id: "calculus", name: "Calculus",
-    icon: <FunctionSquare className="h-3.5 w-3.5" />, color: "text-amber-500",
-    templates: [
-      { name: "Riemann Sums",     desc: "Rectangles converging to integral" },
-      { name: "Taylor Series",    desc: "Polynomial approximation of sin(x)" },
-      { name: "Derivative Slope", desc: "Tangent line sliding along a curve" },
-      { name: "Arc Length Sweep", desc: "Parametric curve length integral" },
-    ],
-  },
-  {
-    id: "linear-algebra", name: "Linear Algebra",
-    icon: <LayoutGrid className="h-3.5 w-3.5" />, color: "text-rose-500",
-    templates: [
-      { name: "Matrix Transform",  desc: "ApplyMatrix on NumberPlane" },
-      { name: "Eigenvectors",      desc: "Eigenvalue scaling visualization" },
-      { name: "Dot Product",       desc: "Projection onto a vector" },
-      { name: "Gram–Schmidt",      desc: "Orthonormal basis construction" },
-    ],
-  },
-  {
-    id: "transforms", name: "Transforms",
-    icon: <Sparkles className="h-3.5 w-3.5" />, color: "text-sky-500",
-    templates: [
-      { name: "Fourier Series",   desc: "Rotating phasors → waveform" },
-      { name: "Cycloid Trace",    desc: "Point on a rolling circle" },
-    ],
-  },
-  {
-    id: "fractals", name: "Fractals",
-    icon: <Infinity className="h-3.5 w-3.5" />, color: "text-purple-500",
-    templates: [
-      { name: "Koch Snowflake",   desc: "Recursive edge subdivision" },
-      { name: "Sierpiński Triangle", desc: "Self-similar triangle recursion" },
-      { name: "Dragon Curve",     desc: "L-system paper-fold fractal" },
-    ],
-  },
-  {
-    id: "number-theory", name: "Number Theory",
-    icon: <Sparkles className="h-3.5 w-3.5" />, color: "text-emerald-500",
-    templates: [
-      { name: "Sieve of Eratosthenes", desc: "Composite crossing animation" },
-      { name: "Prime Ulam Spiral",     desc: "Primes on a spiral grid" },
-      { name: "Collatz Sequence",      desc: "3n+1 branching tree" },
-      { name: "GCD Euclidean",         desc: "Step-by-step Euclid algorithm" },
-    ],
-  },
-];
+import { TEMPLATES } from "@/lib/templates";
 
 /* ─── Asset library data ─────────────────────────────────── */
 
@@ -115,7 +44,7 @@ const PLOT_ASSETS: { name: string; icon: React.ReactNode }[] = [
     icon: <svg viewBox="0 0 40 40" fill="none">
       <line x1="6" y1="34" x2="36" y2="34" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
       <line x1="6" y1="34" x2="6" y2="6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-      <path d="M33 31 L37 34 L33 37" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+      <path d="M33 31 L37 34  33 37" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
       <path d="M3 9 L6 5 L9 9" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
       <path d="M6 28 Q14 14 28 18" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round"/>
     </svg>,
@@ -200,19 +129,15 @@ const PALETTE_ASSETS: { name: string; colors: string[] }[] = [
 /* ─── Sidebar ────────────────────────────────────────────── */
 
 interface SidebarProps {
-  onTemplateClick?: (templateKey: string) => void;
+  onTemplateClick?: (templateId: string) => void;
+  selectedTemplate?: string | null;
 }
 
-export function Sidebar({ onTemplateClick }: SidebarProps) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    geometry: true,
-    calculus: true,
-  });
+export function Sidebar({ onTemplateClick, selectedTemplate }: SidebarProps) {
   const [assetOpen,   setAssetOpen]   = useState(false);
   const [activeAsset, setActiveAsset] = useState<AssetTab>("shapes");
 
-  const toggle = (id: string) =>
-    setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  const categories = Array.from(new Set(TEMPLATES.map(t => t.category)));
 
   return (
     <div className="w-60 border-r border-border bg-sidebar flex flex-col shrink-0 h-full overflow-hidden">
@@ -225,47 +150,36 @@ export function Sidebar({ onTemplateClick }: SidebarProps) {
 
       {/* Templates list */}
       <ScrollArea className="flex-1 h-0">
-        <div className="p-2 space-y-0.5">
-          {CATEGORIES.map(category => (
-            <div key={category.id}>
-              <Button
-                variant="ghost"
-                className="w-full justify-start h-9 px-2.5 text-sm font-semibold text-foreground hover:bg-accent hover:text-accent-foreground rounded-xl"
-                onClick={() => toggle(category.id)}
-                data-testid={`button-category-${category.id}`}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-2.5">
-                    <span className={category.color}>{category.icon}</span>
-                    <span>{category.name}</span>
-                  </div>
-                  {expanded[category.id]
-                    ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                    : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  }
-                </div>
-              </Button>
-
-              {expanded[category.id] && (
-                <div className="pl-3 pr-1 pb-1 space-y-0.5">
-                  {category.templates.map((tpl, i) => (
-                    <div
-                      key={i}
-                      onClick={() => onTemplateClick?.(tpl.name)}
-                      className="group flex items-start gap-2.5 py-2 px-2.5 rounded-xl hover:bg-accent cursor-pointer transition-colors"
-                      data-testid={`template-${category.id}-${i}`}
-                    >
-                      <Star className="h-3 w-3 mt-0.5 text-muted-foreground/40 group-hover:text-primary shrink-0 transition-colors" />
-                      <div className="min-w-0 flex-1">
-                        <span className="text-xs font-medium text-foreground group-hover:text-primary transition-colors truncate block">
-                          {tpl.name}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground/70 truncate block">{tpl.desc}</span>
-                      </div>
+        <div className="p-0">
+          {categories.map(category => (
+            <div key={category} className="mb-2">
+              <div className="text-[9px] text-muted-foreground/50 font-bold uppercase tracking-widest px-4 pt-4 pb-1">
+                {category}
+              </div>
+              <div className="space-y-0.5 px-2">
+                {TEMPLATES.filter(t => t.category === category).map(template => (
+                  <button
+                    key={template.id}
+                    onClick={() => onTemplateClick?.(template.id)}
+                    className={`w-full group flex flex-col items-flex-start py-2 px-3 rounded-xl transition-all text-left ${
+                      selectedTemplate === template.id
+                        ? "bg-primary/10 border-primary/20"
+                        : "hover:bg-accent border-transparent"
+                    } border`}
+                    data-testid={`template-${template.id}`}
+                  >
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <Star className={`h-2.5 w-2.5 ${selectedTemplate === template.id ? "text-primary fill-primary" : "text-muted-foreground/30 group-hover:text-primary"} transition-colors`} />
+                      <span className={`text-[12px] font-semibold ${selectedTemplate === template.id ? "text-primary" : "text-foreground"} transition-colors`}>
+                        {template.name}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <span className="text-[10px] text-muted-foreground/60 line-clamp-1 pl-4">
+                      {template.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           ))}
         </div>

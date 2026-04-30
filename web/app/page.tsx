@@ -8,6 +8,7 @@ import { CodeEditor } from "@/components/workspace/code-editor";
 import { VideoOutput } from "@/components/workspace/video-output";
 import { ApiSettings } from "@/components/workspace/api-settings";
 import { Sparkles, Code2 } from "lucide-react";
+import { TEMPLATES } from "@/lib/templates";
 
 // Module-level code store — never stale, never affected by closures
 let _currentCode = '';
@@ -55,6 +56,7 @@ export default function Home() {
   const [videoFilename, setVideoFilename] = useState<string | null>(null);
   const [engineOnline, setEngineOnline] = useState(false);
   const [selectedApi, setSelectedApi] = useState("auto");
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
 
   // Monaco editor refs
   const editorRef = useRef<any>(null);
@@ -96,6 +98,7 @@ export default function Home() {
     if (!prompt.trim()) return;
     setIsGenerating(true);
     setError(null);
+    setSelectedTemplate(null);
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -189,8 +192,33 @@ export default function Home() {
     }
   };
 
-  const handleTemplateClick = (name: string) => {
-    console.log('Template clicked:', name, '(templates not yet implemented)');
+  const handleTemplateClick = (templateId: string) => {
+    const template = TEMPLATES.find(t => t.id === templateId);
+    
+    if (!template) {
+      console.warn('[template] ID not found:', templateId);
+      return;
+    }
+  
+    console.log('[template] Loading:', template.name);
+    console.log('[template] Class:', template.code.match(/class\s+(\w+)/)?.[1]);
+  
+    // Set module-level store
+    _currentCode = template.code;
+  
+    // Update Monaco directly
+    if (editorRef.current) {
+      editorRef.current.setValue(template.code);
+    }
+  
+    // Update React state
+    setGeneratedCode(template.code);
+    setSelectedTemplate(templateId);
+    setLeftPanel("editor");
+  
+    // Clear previous video
+    if (videoUrl) URL.revokeObjectURL(videoUrl);
+    setVideoUrl(null);
   };
 
 
@@ -212,7 +240,7 @@ export default function Home() {
       />
 
       <div className="flex flex-1 overflow-hidden min-h-0">
-        <Sidebar onTemplateClick={handleTemplateClick} />
+        <Sidebar onTemplateClick={handleTemplateClick} selectedTemplate={selectedTemplate} />
 
         <main className="flex flex-1 flex-col relative min-w-0 min-h-0">
           {error && (
@@ -261,6 +289,7 @@ export default function Home() {
                     onChange={(val) => {
                       _currentCode = val;
                       setGeneratedCode(val);
+                      setSelectedTemplate(null);
                     }} 
                     onMount={(editor) => { 
                       editorRef.current = editor;
