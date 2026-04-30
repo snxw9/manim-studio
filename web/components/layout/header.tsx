@@ -18,7 +18,7 @@ import { useTheme } from "@/app/providers";
 import type { RenderSettings, Resolution, FrameRate, Format, AspectRatio } from "@/app/page";
 
 const QUALITY_MATRIX: Record<Resolution, Record<FrameRate, string>> = {
-  "360p":  { "24fps": "Low",  "30fps": "Low",  "60fps": "Low",  "120fps": "Low"  },
+  "480p":  { "24fps": "Low",  "30fps": "Low",  "60fps": "Low",  "120fps": "Low"  },
   "720p":  { "24fps": "Low",  "30fps": "Mid",  "60fps": "Mid",  "120fps": "Mid"  },
   "1080p": { "24fps": "Mid",  "30fps": "High", "60fps": "High", "120fps": "High" },
   "2k":    { "24fps": "High", "30fps": "High", "60fps": "QHD",  "120fps": "QHD"  },
@@ -65,7 +65,7 @@ const ASPECT_RATIOS: { value: AspectRatio; label: string; icons: React.ReactNode
 ];
 
 const QUALITY_ESTIMATES: Record<string, { seconds: number; range: string }> = {
-  '360p':  { seconds: 20,  range: '10–40s' },
+  '480p':  { seconds: 20,  range: '10–40s' },
   '720p':  { seconds: 90,  range: '30–120s' },
   '1080p': { seconds: 180, range: '60–240s' },
   '2k':    { seconds: 300, range: '3–6 min' },
@@ -197,7 +197,7 @@ export function Header({ settings, engineOnline, onRender, isRendering, elapsed 
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="rounded-xl border-border bg-popover shadow-lg w-36">
                 <DropdownMenuRadioGroup value={resolution} onValueChange={v => setResolution(v as Resolution)}>
-                  {(["360p", "720p", "1080p", "2k", "4k"] as Resolution[]).map(r => (
+                  {(["480p", "720p", "1080p", "2k", "4k"] as Resolution[]).map(r => (
                     <DropdownMenuRadioItem key={r} value={r} className="font-mono text-sm cursor-pointer rounded-lg my-0.5">
                       {r}
                     </DropdownMenuRadioItem>

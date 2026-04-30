@@ -169,20 +169,26 @@ def render_scene(code: str, quality: str = "720p", fmt: str = "mp4") -> dict:
         raise ValueError("No Scene class found")
     class_name = match.group(1)
 
+    # Issue 1: Normalized quality map
     quality_map = {
-        "480p": "-ql", "720p": "-qm",
-        "1080p": "-qh", "2160p": "-qk",
+        "480p": "-ql",
+        "720p": "-qm",
+        "1080p": "-qh",
+        "2160p": "-qk",
     }
     
     QUALITY_TIMEOUTS = {
-        "-ql": 60,    # 480p  — simple scenes render fast
-        "-qm": 120,   # 720p  — standard, most scenes fit here
-        "-qh": 240,   # 1080p — high quality, LaTeX heavy scenes
-        "-qk": 480,   # 4K    — very slow, give it 8 minutes
+        "-ql": 90,    # 480p
+        "-qm": 180,   # 720p
+        "-qh": 300,   # 1080p
+        "-qk": 600,   # 4K
     }
 
-    q_flag = quality_map.get(quality, "-qm")
-    timeout = QUALITY_TIMEOUTS.get(q_flag, 120)
+    q_flag = quality_map.get(quality, "-qm") # Default to 720p
+    timeout = QUALITY_TIMEOUTS.get(q_flag, 180)
+    
+    print(f"[render] quality received: {quality!r} -> flag: {q_flag}")
+
     fmt_actual = "mp4" if fmt == "mov" else fmt
 
     with tempfile.TemporaryDirectory() as tmpdir:

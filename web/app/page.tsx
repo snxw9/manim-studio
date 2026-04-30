@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { PromptInput } from "@/components/workspace/prompt-input";
@@ -21,7 +21,7 @@ export function getCurrentCode(): string {
   return _currentCode;
 }
 
-export type Resolution  = "360p" | "720p" | "1080p" | "2k" | "4k";
+export type Resolution  = "480p" | "720p" | "1080p" | "2k" | "4k";
 export type FrameRate   = "24fps" | "30fps" | "60fps" | "120fps";
 export type Format      = "mp4" | "mkv" | "gif" | "webm";
 export type AspectRatio = "16:9" | "9:16" | "1:1" | "4:3" | "21:9";
@@ -43,7 +43,7 @@ export default function Home() {
   const [isApiSettingsOpen, setIsApiSettingsOpen] = useState(false);
   const [leftPanel, setLeftPanel] = useState<LeftPanel>("prompt");
 
-  const [resolution,  setResolution]  = useState<Resolution>("1080p");
+  const [resolution,  setResolution]  = useState<Resolution>("720p");
   const [frameRate,   setFrameRate]   = useState<FrameRate>("30fps");
   const [format,      setFormat]      = useState<Format>("mp4");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("16:9");
@@ -57,6 +57,7 @@ export default function Home() {
   const [engineOnline, setEngineOnline] = useState(false);
   const [selectedApi, setSelectedApi] = useState("auto");
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [qualityChanged, setQualityChanged] = useState(false);
 
   // Monaco editor refs
   const editorRef = useRef<any>(null);
@@ -94,11 +95,35 @@ export default function Home() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
+  const clearVideo = useCallback(() => {
+    if (videoUrl) {
+      URL.revokeObjectURL(videoUrl);
+      setVideoUrl(null);
+    }
+    setVideoFilename(null);
+  }, [videoUrl]);
+
+  const handleQualityChange = (newQuality: Resolution) => {
+    // Validate — reject 360p (effectively done by TS type but for robustness)
+    const valid: Resolution[] = ['480p', '720p', '1080p', '2k', '4k'];
+    const q = valid.includes(newQuality) ? newQuality : '720p';
+    
+    setResolution(q);
+    
+    // Clear video so user knows they need to re-render
+    clearVideo();
+    
+    // Show a subtle hint
+    setQualityChanged(true);
+    setTimeout(() => setQualityChanged(false), 3000);
+  };
+
   const handleGenerate = async (prompt: string) => {
     if (!prompt.trim()) return;
     setIsGenerating(true);
     setError(null);
     setSelectedTemplate(null);
+    clearVideo();
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -134,11 +159,7 @@ export default function Home() {
     }
 
     // Clear previous render completely
-    if (videoUrl) {
-      URL.revokeObjectURL(videoUrl);
-    }
-    setVideoUrl(null);
-    setVideoFilename(null);
+    clearVideo();
     setError(null);
     setRenderTime(null);
     setElapsed(0);
@@ -150,10 +171,10 @@ export default function Home() {
     }, 1000);
 
     const qualityMap: Record<string, string> = {
-      "360p": "480p",
+      "480p": "480p",
       "720p": "720p",
       "1080p": "1080p",
-      "2k": "1080p",
+      "2k": "1080p", // 2K maps to 1080p flag in engine for now
       "4k": "2160p"
     };
     const qualityValue = qualityMap[resolution] || resolution || '720p';
@@ -203,6 +224,9 @@ export default function Home() {
     console.log('[template] Loading:', template.name);
     console.log('[template] Class:', template.code.match(/class\s+(\w+)/)?.[1]);
   
+    // Clear previous video
+    clearVideo();
+
     // Set module-level store
     _currentCode = template.code;
   
@@ -215,16 +239,12 @@ export default function Home() {
     setGeneratedCode(template.code);
     setSelectedTemplate(templateId);
     setLeftPanel("editor");
-  
-    // Clear previous video
-    if (videoUrl) URL.revokeObjectURL(videoUrl);
-    setVideoUrl(null);
   };
 
 
   const settings: RenderSettings = {
     resolution, frameRate, format, aspectRatio,
-    setResolution, setFrameRate, setFormat, setAspectRatio,
+    setResolution: handleQualityChange as any, setFrameRate, setFormat, setAspectRatio,
   };
 
   return (
@@ -246,6 +266,12 @@ export default function Home() {
           {error && (
             <div className="bg-destructive/15 text-destructive text-xs px-4 py-2 border-b border-destructive/20">
               {error}
+            </div>
+          )}
+
+          {qualityChanged && (
+            <div className="bg-amber-500/10 text-amber-500 text-[10px] px-4 py-1 border-b border-amber-500/20 font-medium animate-pulse">
+              Quality changed — render again to update video output
             </div>
           )}
           
@@ -308,11 +334,7 @@ export default function Home() {
                 aspectRatio={aspectRatio} 
                 videoUrl={videoUrl}
                 videoFilename={videoFilename}
-                onClear={() => {
-                  if (videoUrl) URL.revokeObjectURL(videoUrl);
-                  setVideoUrl(null);
-                  setVideoFilename(null);
-                }}
+                onClear={clearVideo}
               />
             </div>
           </div>

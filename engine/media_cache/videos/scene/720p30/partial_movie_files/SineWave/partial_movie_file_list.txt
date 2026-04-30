@@ -1,0 +1,9 @@
+# This file is used internally by FFMPEG.
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/720p30/partial_movie_files/SineWave/1292736442_2633398736_223132457.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/720p30/partial_movie_files/SineWave/2827983349_4079250704_2758284742.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/720p30/partial_movie_files/SineWave/2827983349_1481815839_446181884.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/720p30/partial_movie_files/SineWave/2827983349_2951978251_1666280314.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/720p30/partial_movie_files/SineWave/2827983349_777533319_1254507098.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/720p30/partial_movie_files/SineWave/2827983349_2534868057_340038709.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/720p30/partial_movie_files/SineWave/2827983349_310540274_1911924539.mp4'
+file 'file:C:/Users/Abdulfatai/Documents/manim-studio/engine/media_cache/videos/scene/720p30/partial_movie_files/SineWave/2827983349_632391845_3083926947.mp4'

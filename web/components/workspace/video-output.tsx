@@ -23,7 +23,7 @@ const ASPECT_RATIO_STYLE: Record<AspectRatio, React.CSSProperties> = {
 };
 
 const QUALITY_LABEL: Record<Resolution, Record<FrameRate, string>> = {
-  "360p":  { "24fps": "Low",  "30fps": "Low",  "60fps": "Low",  "120fps": "Low"  },
+  "480p":  { "24fps": "Low",  "30fps": "Low",  "60fps": "Low",  "120fps": "Low"  },
   "720p":  { "24fps": "Low",  "30fps": "Mid",  "60fps": "Mid",  "120fps": "Mid"  },
   "1080p": { "24fps": "Mid",  "30fps": "High", "60fps": "High", "120fps": "High" },
   "2k":    { "24fps": "High", "30fps": "High", "60fps": "QHD",  "120fps": "QHD"  },
