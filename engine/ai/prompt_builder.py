@@ -251,13 +251,40 @@ class DescriptiveName(Scene):
     def construct(self):
         # code here
 
-QUALITY STANDARDS:
-- Every animation must have a clear title
-- Use color meaningfully — different colors for different concepts  
-- Animate progressively — build up the scene step by step
-- Label all mathematical objects clearly
-- End scenes cleanly with FadeOut
-- Match the complexity the user requests — if they want something detailed, make it detailed
+ANIMATION QUALITY AND TIMING STANDARDS:
+
+Duration guidelines:
+- Simple concept (one shape, one equation): 8-15 seconds
+- Medium concept (multiple steps, labeled): 15-30 seconds  
+- Complex proof or algorithm: 30-60 seconds
+- Multi-part explanation: 60-90 seconds
+
+Always use these pacing rules:
+- self.wait(0.5) between related steps
+- self.wait(1) after introducing a new concept
+- self.wait(1.5) after a key result
+- self.wait(2) at the end before FadeOut
+
+Always end with:
+  self.play(*[FadeOut(m) for m in self.mobjects])
+
+Never use self.wait() longer than 2.5 seconds at once.
+Never use run_time longer than 3 seconds for a single animation.
+These keep renders predictable and within timeout limits.
+
+For complex animations, break into logical sections:
+  # Section 1 — Setup
+  ... setup code ...
+  self.wait(1)
+  
+  # Section 2 — Main concept
+  ... main animation ...
+  self.wait(1.5)
+  
+  # Section 3 — Conclusion
+  ... result ...
+  self.wait(2)
+  self.play(*[FadeOut(m) for m in self.mobjects])
 
 WHAT TO DO FOR COMMON REQUESTS:
 - "waterfall model" = software development phases in labeled boxes

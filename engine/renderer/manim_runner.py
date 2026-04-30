@@ -1,251 +1,155 @@
-import tempfile
-import os
-import subprocess
-import re
-import datetime
+import base64
 import glob
-import shutil
 import hashlib
-import ast
+import os
+import re
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
-MEDIA_DIR = Path(__file__).parent.parent / "media_cache"
+ENGINE_DIR = Path(__file__).parent.parent
+OUTPUTS_DIR = ENGINE_DIR / "outputs"
+LATEX_CACHE_DIR = ENGINE_DIR / "latex_cache"
+
+OUTPUTS_DIR.mkdir(exist_ok=True)
+LATEX_CACHE_DIR.mkdir(exist_ok=True)
+
+QUALITY_MAP = {
+    "480p":  "-ql",
+    "720p":  "-qm",
+    "1080p": "-qh",
+    "2160p": "-qk",
+}
+
+QUALITY_TIMEOUTS = {
+    "-ql": 90,
+    "-qm": 180,
+    "-qh": 300,
+    "-qk": 600,
+}
+
+QUALITY_RESOLUTION = {
+    "-ql": "854,480",
+    "-qm": "1280,720",
+    "-qh": "1920,1080",
+    "-qk": "3840,2160",
+}
 
 def pre_validate(code: str) -> str | None:
-    """Returns error string or None if valid."""
+    import ast
     try:
-        import ast
         ast.parse(code)
     except SyntaxError as e:
         return f"Syntax error at line {e.lineno}: {e.msg}"
-    
-    if 'def construct' not in code:
+    if "def construct" not in code:
         return "Missing construct(self) method"
-    
     if not re.search(r'class\s+\w+\s*\(', code):
         return "No Scene class found"
-    
-    return None  # valid
-
-def cleanup_previews(scene_name: str, output_dir: str):
-    """Delete all preview files for a given scene name."""
-    pattern = os.path.join(output_dir, f"{scene_name}_preview_*.mp4")
-    for f in glob.glob(pattern):
-        try:
-            os.remove(f)
-            print(f"Cleaned up preview: {f}")
-        except Exception as e:
-            print(f"Error cleaning up preview {f}: {e}")
-
-def run_manim(code: str, preview: bool = False, quality: str = "720p", fmt: str = "mp4") -> str:
-    # Pre-validate before calling Manim
-    error = pre_validate(code)
-    if error:
-        raise ValueError(error)
-
-    # 1. Parse scene name
-    match = re.search(r'class\s+(\w+)\s*\(', code)
-    scene_name = match.group(1) if match else "Animation"
-    
-    output_dir = os.path.abspath(os.getenv("MANIM_OUTPUT_DIR", "./outputs"))
-    os.makedirs(output_dir, exist_ok=True)
-
-    # 2. Handle preview cleanup if it's a final render
-    if not preview:
-        cleanup_previews(scene_name, output_dir)
-
-    # 3. Handle persistent code file named by code hash
-    MEDIA_CACHE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "media_cache"))
-    os.makedirs(MEDIA_CACHE, exist_ok=True)
-    
-    code_hash = hashlib.md5(code.encode()).hexdigest()[:12]
-    code_file = os.path.join(MEDIA_CACHE, f"scene_{code_hash}.py")
-    with open(code_file, "w", encoding="utf-8") as f:
-        f.write(code)
-    tmp_path = code_file
-        
-    # 4. Map quality to manim flags
-    quality_map = {
-        "480p": "-ql",
-        "720p": "-qm",
-        "1080p": "-qh",
-        "2160p": "-qk"
-    }
-    quality_flag = quality_map.get(quality, "-qm") if not preview else "-ql"
-
-    quality_resolution = {
-        "-ql": "854,480",    # 480p  16:9
-        "-qm": "1280,720",   # 720p  16:9
-        "-qh": "1920,1080",  # 1080p 16:9
-        "-qk": "3840,2160",  # 4K    16:9
-    }
-    resolution_val = quality_resolution.get(quality_flag, "1280,720")
-    
-    # FPS logic
-    fps = "60" if quality == "2160p" else "30"
-
-    # 5. Define output filename
-    if preview:
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_filename = f"{scene_name}_preview_{timestamp}.mp4"
-    else:
-        output_filename = f"{scene_name}_{quality}.{fmt}"
-
-    final_output_path = os.path.join(output_dir, output_filename)
-
-    try:
-        # Run manim via subprocess
-        manim_fmt = fmt if fmt in ["mp4", "gif"] else "mp4"
-        
-        cmd = [
-            "manim", quality_flag,
-            "--fps", fps,
-            "--resolution", resolution_val,
-            "--format", manim_fmt,
-            "--media_dir", str(MEDIA_DIR),
-            "--progress_bar", "none",
-            tmp_path,
-            scene_name,
-        ]
-        
-        print(f"Executing: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=90)
-        
-        # Manim creates nested directories by default
-        search_pattern = os.path.join(str(MEDIA_DIR), "videos", "**", output_filename)
-        found_files = glob.glob(search_pattern, recursive=True)
-        
-        if found_files:
-            # Move it to the root of output_dir
-            shutil.copy2(found_files[0], final_output_path)
-            
-            # Safely cleanup the empty nested directories manim creates
-            try:
-                parent_dir = os.path.dirname(found_files[0])
-                while parent_dir.startswith(str(MEDIA_DIR)) and parent_dir != str(MEDIA_DIR):
-                    if not os.listdir(parent_dir):
-                        os.rmdir(parent_dir)
-                        parent_dir = os.path.dirname(parent_dir)
-                    else:
-                        break
-            except Exception as cleanup_err:
-                print(f"Non-critical cleanup error: {cleanup_err}")
-        else:
-            if not os.path.exists(final_output_path):
-                raise RuntimeError(f"Manim finished but {output_filename} was not found. Stdout: {result.stdout}")
-
-        # Post-processing for webm/mov if needed
-        if not preview and fmt in ["webm", "mov"]:
-            temp_mp4 = final_output_path
-            if fmt == "webm":
-                new_path = final_output_path.replace(".mp4", ".webm")
-                subprocess.run(["ffmpeg", "-y", "-i", temp_mp4, "-c:v", "libvpx-vp9", "-b:v", "1M", new_path], check=True)
-                os.remove(temp_mp4)
-                final_output_path = new_path
-            elif fmt == "mov":
-                new_path = final_output_path.replace(".mp4", ".mov")
-                subprocess.run(["ffmpeg", "-y", "-i", temp_mp4, "-codec", "copy", new_path], check=True)
-                os.remove(temp_mp4)
-                final_output_path = new_path
-
-        return final_output_path
-
-    except subprocess.CalledProcessError as e:
-        print(f"Manim Error Stdout: {e.stdout}")
-        print(f"Manim Error Stderr: {e.stderr}")
-        raise RuntimeError(f"Manim rendering failed:\n{e.stderr}")
+    return None
 
 def render_scene(code: str, quality: str = "720p", fmt: str = "mp4") -> dict:
-    import base64, glob, os, re, subprocess, tempfile
-    from pathlib import Path
+    # Validate quality
+    q_flag = QUALITY_MAP.get(quality, "-qm")
+    print(f"[render] quality={quality!r} -> flag={q_flag}")
 
-    OUTPUTS_DIR = Path(__file__).parent.parent / "outputs"
-    OUTPUTS_DIR.mkdir(exist_ok=True)
-    MEDIA_DIR = Path(__file__).parent.parent / "media_cache"
-    MEDIA_DIR.mkdir(exist_ok=True)
-
+    # Get scene class name
     match = re.search(r'class\s+(\w+)\s*\(', code)
     if not match:
-        raise ValueError("No Scene class found")
+        raise ValueError("No Scene class found in code")
     class_name = match.group(1)
-
-    # Issue 1: Normalized quality map
-    quality_map = {
-        "480p": "-ql",
-        "720p": "-qm",
-        "1080p": "-qh",
-        "2160p": "-qk",
-    }
-    
-    QUALITY_TIMEOUTS = {
-        "-ql": 90,    # 480p
-        "-qm": 180,   # 720p
-        "-qh": 300,   # 1080p
-        "-qk": 600,   # 4K
-    }
-
-    q_flag = quality_map.get(quality, "-qm") # Default to 720p
-    timeout = QUALITY_TIMEOUTS.get(q_flag, 180)
-    
-    print(f"[render] quality received: {quality!r} -> flag: {q_flag}")
+    print(f"[render] class={class_name}")
 
     fmt_actual = "mp4" if fmt == "mov" else fmt
+    timeout = QUALITY_TIMEOUTS.get(q_flag, 180)
+    resolution = QUALITY_RESOLUTION.get(q_flag, "1280,720")
 
+    # Use a FRESH temp dir for every render — no caching of video
+    # Only LaTeX intermediate files are cached persistently
     with tempfile.TemporaryDirectory() as tmpdir:
+        # Write scene file
         code_file = os.path.join(tmpdir, "scene.py")
         with open(code_file, "w", encoding="utf-8") as f:
             f.write(code)
 
+        # media_dir is the temp dir for VIDEO output
+        # MANIM_TEX_DIR environment variable for persistent LaTeX cache
         cmd = [
-            "manim", q_flag,
+            "manim",
+            q_flag,
             "--fps", "30",
+            "--resolution", resolution,
             "--format", fmt_actual,
-            "--media_dir", str(MEDIA_DIR),
+            "--media_dir", tmpdir,          # fresh every time
+            "--disable_caching",            # never reuse video cache
             "--progress_bar", "none",
-            code_file, class_name,
+            code_file,
+            class_name,
         ]
 
+        # Validate all args are strings
         for i, item in enumerate(cmd):
             if not isinstance(item, str):
                 raise TypeError(f"cmd[{i}] is {type(item).__name__}: {repr(item)}")
 
+        print(f"[render] timeout={timeout}s")
+
+        env = os.environ.copy()
+        env["MANIM_TEX_DIR"] = str(LATEX_CACHE_DIR)
+
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=timeout,
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
             )
         except subprocess.TimeoutExpired:
             raise RuntimeError(
-                f"Render timed out after {timeout}s at {quality} quality.\n"
-                f"Try a lower quality setting or simplify the animation.\n"
-                f"Tip: Use 720p for faster iteration, 1080p only for final export."
+                f"Render timed out after {timeout}s at {quality}.\n"
+                f"Try a lower quality setting or a simpler animation."
+            )
+        except FileNotFoundError:
+            raise RuntimeError(
+                "manim not found. Make sure it is installed in the venv."
             )
 
         if result.returncode != 0:
-            raise RuntimeError(result.stderr[-3000:])
+            raise RuntimeError(
+                f"Manim error:\n{result.stderr[-3000:]}"
+            )
 
-        matches = glob.glob(
-            os.path.join(str(MEDIA_DIR), "**", f"*.{fmt_actual}"),
-            recursive=True,
-        )
-        matches += glob.glob(
+        # Find the output file — search recursively in temp dir
+        patterns = [
+            os.path.join(tmpdir, "**", f"{class_name}.{fmt_actual}"),
             os.path.join(tmpdir, "**", f"*.{fmt_actual}"),
-            recursive=True,
-        )
+        ]
+        matches = []
+        for pattern in patterns:
+            matches = glob.glob(pattern, recursive=True)
+            if matches:
+                break
 
         if not matches:
-            raise RuntimeError(f"No output file.\n{result.stderr[-500:]}")
+            raise RuntimeError(
+                f"No .{fmt_actual} file found after render.\n"
+                f"STDERR: {result.stderr[-1000:]}"
+            )
 
         video_path = max(matches, key=os.path.getctime)
+        print(f"[render] output={video_path}")
 
-        # Friendly filename
+        # Build friendly filename
         spaced = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', class_name)
         spaced = spaced.replace(' Scene', '').replace('Scene', '').strip()
-        friendly = f"{spaced} ({quality}).{fmt_actual}"
-        friendly_safe = re.sub(r'[<>:\"/\\|?*]', '', friendly)
-        output_path = OUTPUTS_DIR / friendly_safe
-        import shutil
+        friendly = re.sub(r'[<>:"/\\|?*]', '', f"{spaced} ({quality}).{fmt_actual}")
+
+        # Copy to outputs dir for reference
+        output_path = OUTPUTS_DIR / friendly
         shutil.copy2(video_path, output_path)
 
+        # Read and return as base64
         with open(video_path, "rb") as f:
             video_bytes = f.read()
 
@@ -253,6 +157,6 @@ def render_scene(code: str, quality: str = "720p", fmt: str = "mp4") -> dict:
             "video": base64.b64encode(video_bytes).decode(),
             "mimeType": f"video/{fmt_actual}",
             "className": class_name,
-            "filename": friendly_safe,
+            "filename": friendly,
             "size": len(video_bytes),
         }
