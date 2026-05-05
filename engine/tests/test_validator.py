@@ -75,3 +75,25 @@ class MyScene(Scene):
 """
     result = validate_manim_code(code)
     assert not result["valid"]
+
+def test_catches_parametric_surface():
+    code = "surface = ParametricSurface(lambda u, v: np.array([u, v, 0]))"
+    result = validate_manim_code(code)
+    assert not result["valid"]
+    assert "Surface" in result["errors"][0]
+
+def test_auto_fixes_parametric_surface():
+    code = "surface = ParametricSurface(lambda u, v: np.array([u, v, 0]))"
+    result = validate_manim_code(code)
+    assert "ParametricSurface" not in result["fixed_code"]
+    assert "Surface" in result["fixed_code"]
+
+def test_catches_show_creation():
+    code = "self.play(ShowCreation(circle))"
+    result = validate_manim_code(code)
+    assert not result["valid"]
+
+def test_catches_graph_scene():
+    code = "class MyScene(GraphScene):"
+    result = validate_manim_code(code)
+    assert not result["valid"]

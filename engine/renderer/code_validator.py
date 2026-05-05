@@ -38,6 +38,43 @@ BANNED_PATTERNS = {
         "Loop with 360+ iterations detected. "
         "Use TracedPath or ParametricFunction instead of looping to create paths. "
         "Never call self.wait() or self.add() inside large loops.",
+
+    # Removed in Manim v0.17+ — replaced with Surface
+    r'ParametricSurface\s*\(':
+        "ParametricSurface was removed in Manim v0.17. "
+        "Use Surface() instead:\n"
+        "Surface(func, u_range=[a,b], v_range=[a,b], resolution=(20,20))\n"
+        "where func takes (u,v) and returns np.array([x, y, z])",
+
+    # Other commonly hallucinated removed/renamed classes
+    r'GraphScene\s*\(':
+        "GraphScene was removed. Use Scene with Axes() instead:\n"
+        "axes = Axes(x_range=[a,b], y_range=[a,b])\n"
+        "curve = axes.plot(lambda x: f(x), color=BLUE)",
+
+    r'NumberLine\s*\(.*unit_size':
+        "unit_size parameter was removed from NumberLine. "
+        "Use length= and x_range= to control size instead.",
+
+    r'ShowCreation\s*\(':
+        "ShowCreation was renamed to Create in Manim v0.7+. "
+        "Use Create() instead.",
+
+    r'FadeInFrom\s*\(':
+        "FadeInFrom was removed. Use FadeIn(obj, shift=direction) instead.",
+
+    r'FadeOutAndShift\s*\(':
+        "FadeOutAndShift was removed. Use FadeOut(obj, shift=direction) instead.",
+
+    r'CurvedDoubleArrow\s*\(':
+        "CurvedDoubleArrow does not exist. Use CurvedArrow() instead.",
+
+    r'SurroundingRectangle\s*\([^)]*buff\s*=\s*(?![0-9])':
+        "SurroundingRectangle buff= must be a number like buff=0.1",
+
+    r'\.to_corner\s*\([^)]*buff':
+        "to_corner() does not accept buff as positional arg. "
+        "Use to_corner(UL, buff=0.2) with keyword argument.",
 }
 
 def fix_latex_escapes(code: str) -> str:
@@ -163,6 +200,14 @@ def validate_manim_code(code: str) -> dict:
             fixed_code
         )
         warnings.append("Auto-fixed: Changed Scene to MovingCameraScene")
+
+    # Auto-fix ParametricSurface -> Surface
+    if 'ParametricSurface' in fixed_code:
+        fixed_code = fixed_code.replace('ParametricSurface', 'Surface')
+        warnings.append(
+            "Auto-fixed: ParametricSurface replaced with Surface "
+            "(ParametricSurface was removed in Manim v0.17)"
+        )
 
     return {
         "valid": len(errors) == 0,

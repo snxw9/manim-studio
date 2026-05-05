@@ -7,6 +7,7 @@ import { PromptInput } from "@/components/workspace/prompt-input";
 import { CodeEditor } from "@/components/workspace/code-editor";
 import { VideoOutput } from "@/components/workspace/video-output";
 import { ApiSettings } from "@/components/workspace/api-settings";
+import { ErrorPanel } from "@/components/ui/error-panel";
 import { Sparkles, Code2 } from "lucide-react";
 import { TEMPLATES } from "@/lib/templates";
 
@@ -118,8 +119,14 @@ export default function Home() {
     setTimeout(() => setQualityChanged(false), 3000);
   };
 
-  const handleGenerate = async (prompt: string) => {
-    if (!prompt.trim()) return;
+  const handleGenerate = async (prompt?: string) => {
+    // If prompt is not passed (from retry), use the last prompt from state if available
+    // but the PromptInput onSubmit passes the prompt string.
+    // For simplicity in retry, we might need the current prompt.
+    // However, the instructions imply handleGenerate is used.
+    const p = typeof prompt === 'string' ? prompt : '';
+    if (!p.trim()) return;
+    
     setIsGenerating(true);
     setError(null);
     setSelectedTemplate(null);
@@ -128,7 +135,7 @@ export default function Home() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, preferredProvider: selectedApi }),
+        body: JSON.stringify({ prompt: p, preferredProvider: selectedApi }),
       });
       const data = await res.json();
       if (data.code) {
@@ -270,8 +277,12 @@ export default function Home() {
 
         <main className="flex flex-1 flex-col relative min-w-0 min-h-0">
           {error && (
-            <div className="bg-destructive/15 text-destructive text-xs px-4 py-2 border-b border-destructive/20">
-              {error}
+            <div className="px-4 py-2 border-b border-border">
+              <ErrorPanel
+                error={error}
+                onDismiss={() => setError(null)}
+                onRetry={error.includes('Render') ? handleRender : undefined}
+              />
             </div>
           )}
 

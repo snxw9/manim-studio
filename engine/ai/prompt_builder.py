@@ -106,6 +106,34 @@ Sector(outer_radius=...) — use Sector(radius=...)
 line.intersection() — use line_intersection() function
 obj.length() — use obj.get_length()
 obj.midpoint() — use obj.get_center()
+
+=== REMOVED FEATURES — NEVER USE THESE ===
+
+These existed in old Manim versions but are GONE in v0.17+:
+- ParametricSurface → use Surface(func, u_range, v_range)
+- GraphScene        → use Scene with Axes()
+- ShowCreation      → use Create()
+- FadeInFrom        → use FadeIn(obj, shift=direction)
+- FadeOutAndShift   → use FadeOut(obj, shift=direction)
+- CurvedDoubleArrow → use CurvedArrow()
+- unit_size= on NumberLine → use length= instead
+- to_center()       → use move_to(ORIGIN)
+- TextMobject       → use Text()
+- TexMobject        → use MathTex()
+
+Correct Surface usage (replaces ParametricSurface):
+  surface = Surface(
+      lambda u, v: np.array([u, v, np.sin(u) * np.cos(v)]),
+      u_range=[-PI, PI],
+      v_range=[-PI, PI],
+      resolution=(20, 20),
+      fill_opacity=0.7,
+  )
+  surface.set_fill_by_value(
+      axes=axes,
+      colorscale=[(BLUE, -1), (GREEN, 0), (RED, 1)],
+      axis=2
+  )
 """
 
 MANIM_SYSTEM_PROMPT = MANIM_API_REFERENCE + """

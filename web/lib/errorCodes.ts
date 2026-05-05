@@ -1,104 +1,199 @@
-export interface ErrorEntry {
+export type ErrorSource = 'generated_code' | 'engine' | 'user_code' | 'network' | 'unknown';
+
+export interface ErrorInfo {
   code: string;
-  pattern: string | RegExp;
   title: string;
-  explanation: string;
-  fix: string;
+  what: string;        // plain English: what happened
+  why: string;         // simple: why it happened  
+  action: string;      // clear: what to do
+  source: ErrorSource;
+  canRetry: boolean;
+  shouldReport: boolean;
 }
 
-export const ERROR_CODES: ErrorEntry[] = [
+const UNKNOWN_ERROR: ErrorInfo = {
+  code: "UNKNOWN",
+  title: "Unexpected Error",
+  what: "Something went wrong while rendering the animation.",
+  why: "An unexpected error occurred that we haven't seen before.",
+  action: "Try clicking Generate again for a fresh attempt. If it keeps happening, use the Report button to let the developer know.",
+  source: 'unknown',
+  canRetry: true,
+  shouldReport: true,
+};
+
+export const ERROR_DEFINITIONS: Array<{
+  pattern: RegExp;
+  info: ErrorInfo;
+}> = [
   {
-    code: "MANIM_001",
-    pattern: /unexpected keyword argument '(\w+)'/,
-    title: "Invalid Constructor Argument",
-    explanation: "A Manim class was called with an argument it does not accept.",
-    fix: "Common fixes: Circle(radius=r) not Circle(width=w). Square(side_length=s) not Square(width=w). Text('...', font_size=n) not Text(width=n).",
+    pattern: /ParametricSurface/i,
+    info: {
+      code: "GEN_001",
+      title: "Outdated Manim Feature",
+      what: "The AI used a Manim feature that no longer exists in the current version.",
+      why: "ParametricSurface was removed from Manim in v0.17 and replaced with Surface(). The AI learned from old examples.",
+      action: "Click 'Try Again' — the validator will auto-fix this automatically.",
+      source: 'generated_code',
+      canRetry: true,
+      shouldReport: false,
+    },
   },
   {
-    code: "MANIM_002",
-    pattern: /object has no attribute '(\w+)'/,
-    title: "Method Does Not Exist",
-    explanation: "The generated code called a method that does not exist in Manim.",
-    fix: "Common fixes: use get_length() not length(). Use get_center() not midpoint(). Use line_intersection() function not line.intersection().",
+    pattern: /object has no attribute 'frame'/i,
+    info: {
+      code: "GEN_002",
+      title: "Wrong Scene Type",
+      what: "The animation tried to move the camera but used the wrong scene type.",
+      why: "Camera movement requires MovingCameraScene instead of Scene. The AI made a mistake choosing the base class.",
+      action: "Click 'Try Again' — the validator now catches this automatically.",
+      source: 'generated_code',
+      canRetry: true,
+      shouldReport: false,
+    },
   },
   {
-    code: "MANIM_003",
-    pattern: /FileNotFoundError.*False/,
-    title: "Invalid Manim Command",
-    explanation: "A boolean value was passed as a command argument to Manim.",
-    fix: "This is an engine bug. Restart the engine: cd engine && uvicorn main:app --reload --port 8000",
+    pattern: /NameError: name '(\w+)' is not defined/i,
+    info: {
+      code: "GEN_003",
+      title: "Unknown Manim Feature",
+      what: "The AI used a Manim class or function that doesn't exist.",
+      why: "The AI invented or misremembered a Manim feature name. This is a known limitation of AI code generation.",
+      action: "Click 'Try Again' to generate fresh code. If it keeps failing, try rephrasing your prompt to be more specific about what you want to see.",
+      source: 'generated_code',
+      canRetry: true,
+      shouldReport: false,
+    },
   },
   {
-    code: "MANIM_004",
-    pattern: /LaTeX.*error|latex.*failed|! Emergency stop/i,
-    title: "LaTeX Compilation Error",
-    explanation: "A MathTex or Tex call contains invalid LaTeX syntax.",
-    fix: "Check all MathTex strings use raw strings: r\"\alpha\" not \"\alpha\". Check for unmatched braces { }.",
+    pattern: /SyntaxError/i,
+    info: {
+      code: "GEN_004",
+      title: "Code Syntax Error",
+      what: "The generated code has a Python syntax error and cannot run.",
+      why: "The AI produced malformed code — this sometimes happens with complex requests.",
+      action: "Click 'Try Again'. If you edited the code yourself, check for missing colons, brackets, or quotes in the Code tab.",
+      source: 'generated_code',
+      canRetry: true,
+      shouldReport: false,
+    },
   },
   {
-    code: "MANIM_005",
-    pattern: /SyntaxError/,
-    title: "Python Syntax Error",
-    explanation: "The generated Python code has a syntax error.",
-    fix: "Switch to the Code tab, find the highlighted error line, and fix the syntax. Or click Generate again for a fresh attempt.",
+    pattern: /latex.*failed|check your latex|LaTeX Error/i,
+    info: {
+      code: "SYS_001",
+      title: "LaTeX Error",
+      what: "The math equation renderer (LaTeX) failed to process a formula.",
+      why: "Either LaTeX is not properly installed, a required package is missing, or the formula contains invalid syntax.",
+      action: "Open MiKTeX Console and click 'Check for updates' to install missing packages. Then try again. If the problem persists, report this to the developer.",
+      source: 'engine',
+      canRetry: true,
+      shouldReport: true,
+    },
   },
   {
-    code: "MANIM_006",
-    pattern: /timed out|TimeoutError/i,
-    title: "Render Timed Out",
-    explanation: "The animation took too long to render.",
-    fix: "Try a simpler prompt, or reduce animation complexity. Use 480p quality for faster renders. Avoid requests for very long animations.",
+    pattern: /timed out after \d+s/i,
+    info: {
+      code: "SYS_002",
+      title: "Render Timed Out",
+      what: "The animation took too long to render and was stopped.",
+      why: "Complex animations take more time at higher quality settings. The current quality setting may be too high for this animation.",
+      action: "Try a lower quality setting (480p or 720p) and render again. If the animation is very complex, it may just need more time.",
+      source: 'engine',
+      canRetry: true,
+      shouldReport: false,
+    },
   },
   {
-    code: "MANIM_007",
-    pattern: /No Scene class found/,
-    title: "Missing Scene Class",
-    explanation: "The generated code has no class that inherits from Scene.",
-    fix: "The code must contain: class MyScene(Scene): with a construct(self) method. Click Generate again.",
-  },
-  {
-    code: "MANIM_008",
     pattern: /ECONNREFUSED|engine.*offline|Engine is offline/i,
-    title: "Engine Offline",
-    explanation: "The Python engine is not running.",
-    fix: "Start the engine: cd engine && uvicorn main:app --reload --port 8000. Or run npm run dev from the web folder which auto-starts it.",
+    info: {
+      code: "SYS_003",
+      title: "Engine Offline",
+      what: "The rendering engine is not running.",
+      why: "The Python engine that processes and renders animations has stopped or was never started.",
+      action: "Double-click START.bat in your project folder to restart everything. The green dot in the bottom bar will turn on when it's ready.",
+      source: 'engine',
+      canRetry: false,
+      shouldReport: false,
+    },
   },
   {
-    code: "MANIM_009",
     pattern: /quota|rate.?limit|429/i,
-    title: "API Quota Exceeded",
-    explanation: "All AI providers have hit their usage limits.",
-    fix: "Wait a few minutes for rate limits to reset, or add your own Groq API key in Settings for unlimited use. Get a free key at console.groq.com.",
+    info: {
+      code: "SYS_004",
+      title: "AI Quota Exhausted",
+      what: "The AI service has reached its usage limit for today.",
+      why: "Free AI APIs have daily limits. All available providers are currently at their limit.",
+      action: "Wait a few minutes and try again — limits reset frequently. Or add your own free Groq API key in Settings for unlimited generations.",
+      source: 'engine',
+      canRetry: true,
+      shouldReport: false,
+    },
   },
   {
-    code: "MANIM_010",
-    pattern: /multiple values for keyword argument/,
-    title: "Duplicate Argument",
-    explanation: "A Manim class received the same argument twice.",
-    fix: "Common cause: Sector(outer_radius=...) — use Sector(radius=...) only.",
+    pattern: /No Scene class found|Missing construct/i,
+    info: {
+      code: "GEN_005",
+      title: "Invalid Animation Structure",
+      what: "The generated code is missing required parts to be a valid animation.",
+      why: "Every Manim animation needs a class that extends Scene and a construct() method. The AI omitted one of these.",
+      action: "Click 'Try Again' for a fresh attempt.",
+      source: 'generated_code',
+      canRetry: true,
+      shouldReport: false,
+    },
   },
   {
-    code: "MANIM_011",
-    pattern: /No output file found|No mp4 found/,
-    title: "No Video Produced",
-    explanation: "Manim ran but did not produce a video file.",
-    fix: "Check the Code tab for logic errors. Make sure construct(self) calls at least one self.play() or self.add(). Try rendering again.",
+    pattern: /TypeError.*got.*unexpected keyword argument/i,
+    info: {
+      code: "GEN_006",
+      title: "Invalid Property",
+      what: "The AI gave an invalid property to a Manim shape or object.",
+      why: "Different Manim objects accept different properties. The AI used one that doesn't apply here (e.g. width= on a Circle).",
+      action: "Click 'Try Again' — the validator will catch this automatically.",
+      source: 'generated_code',
+      canRetry: true,
+      shouldReport: false,
+    },
   },
   {
-    code: "MANIM_012",
-    pattern: /ModuleNotFoundError|ImportError/,
-    title: "Missing Python Module",
-    explanation: "A required Python package is not installed.",
-    fix: "Run in terminal: cd engine && venv\\Scripts\\pip install -r requirements.txt",
+    pattern: /No output file found|No mp4 found/i,
+    info: {
+      code: "SYS_005",
+      title: "No Video Produced",
+      what: "The animation ran but no video file was created.",
+      why: "The animation may have had no visible content, or an issue occurred during video encoding.",
+      action: "Make sure the animation has at least one self.play() call with a visible object. Try again or simplify your prompt.",
+      source: 'engine',
+      canRetry: true,
+      shouldReport: true,
+    },
   },
 ];
 
-export function matchError(errorText: string): ErrorEntry | null {
-  for (const entry of ERROR_CODES) {
-    const pattern = typeof entry.pattern === 'string'
-      ? new RegExp(entry.pattern, 'i')
-      : entry.pattern;
-    if (pattern.test(errorText)) return entry;
+export function analyzeError(errorText: string): ErrorInfo {
+  for (const { pattern, info } of ERROR_DEFINITIONS) {
+    if (pattern.test(errorText)) return info;
   }
-  return null;
+  return UNKNOWN_ERROR;
+}
+
+export function getSourceLabel(source: ErrorSource): string {
+  switch (source) {
+    case 'generated_code': return 'AI Generation Issue';
+    case 'engine':         return 'System Issue';
+    case 'user_code':      return 'Code Issue';
+    case 'network':        return 'Connection Issue';
+    default:               return 'Unknown Issue';
+  }
+}
+
+export function getSourceColor(source: ErrorSource): string {
+  switch (source) {
+    case 'generated_code': return '#f59e0b'; // amber — AI's fault, retryable
+    case 'engine':         return '#ef4444'; // red — system problem
+    case 'user_code':      return '#8b5cf6'; // purple — user's code
+    case 'network':        return '#6b7280'; // gray — connection
+    default:               return '#6b7280';
+  }
 }
