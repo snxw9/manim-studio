@@ -169,6 +169,19 @@ export const ERROR_DEFINITIONS: Array<{
       shouldReport: true,
     },
   },
+  {
+    pattern: /Axes.*has no attribute 'plot_implicit'|plot_implicit/i,
+    info: {
+      code: "GEN_007",
+      title: "Unsupported Plot Type",
+      what: "The AI tried to create an implicit function plot which Manim does not support.",
+      why: "Manim can only plot y=f(x) functions and parametric curves. Implicit equations like f(x,y)=0 require a different approach.",
+      action: "Click 'Try Again'. The validator will now catch this. Or rephrase your prompt — instead of 'plot x²+y²=5' try 'draw a circle with radius √5'.",
+      source: 'generated_code',
+      canRetry: true,
+      shouldReport: false,
+    },
+  },
 ];
 
 export function analyzeError(errorText: string): ErrorInfo {

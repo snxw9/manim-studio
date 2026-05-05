@@ -121,6 +121,20 @@ These existed in old Manim versions but are GONE in v0.17+:
 - TextMobject       → use Text()
 - TexMobject        → use MathTex()
 
+Methods that do NOT exist on Axes or NumberPlane:
+- axes.plot_implicit()    → no implicit plotting in Manim
+                            convert f(x,y)=c to parametric form
+- axes.plot_3d()          → use Surface() in ThreeDScene instead
+- axes.plot_vector_field() → use ArrowVectorField() instead
+- axes.contour()          → does not exist
+- axes.scatter()          → does not exist, use VGroup of Dots
+
+For implicit curves, always convert to parametric:
+  x^2 + y^2 = r^2  →  lambda t: [r*cos(t), r*sin(t), 0]  (circle)
+  x^2/a^2 + y^2/b^2 = 1  →  lambda t: [a*cos(t), b*sin(t), 0]  (ellipse)
+  y^2 = x^3 - x  →  not directly parametric, use axes.plot()
+                     with careful domain splitting instead
+
 Correct Surface usage (replaces ParametricSurface):
   surface = Surface(
       lambda u, v: np.array([u, v, np.sin(u) * np.cos(v)]),

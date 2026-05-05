@@ -75,6 +75,31 @@ BANNED_PATTERNS = {
     r'\.to_corner\s*\([^)]*buff':
         "to_corner() does not accept buff as positional arg. "
         "Use to_corner(UL, buff=0.2) with keyword argument.",
+
+    r'\.plot_implicit\s*\(':
+        "axes.plot_implicit() does not exist in Manim. "
+        "Manim cannot plot implicit functions f(x,y)=0 directly. "
+        "Convert to parametric form instead. "
+        "Example: x^2 + y^2 = r^2 is a circle — use "
+        "axes.plot_parametric_curve(lambda t: [r*np.cos(t), r*np.sin(t), 0], "
+        "t_range=[0, 2*PI])",
+
+    r'\.plot_3d\s*\(':
+        "axes.plot_3d() does not exist. "
+        "For 3D surfaces use Surface() inside a ThreeDScene. "
+        "For 3D parametric curves use ParametricFunction() inside a ThreeDScene.",
+
+    r'\.plot_vector_field\s*\(':
+        "axes.plot_vector_field() does not exist. "
+        "Use ArrowVectorField(lambda p: np.array([fx, fy, 0])) instead.",
+
+    r'\.get_riemann_rectangles\s*\([^)]*dx\s*=\s*':
+        "get_riemann_rectangles uses dx= correctly — "
+        "make sure dx is a float like 0.5 not an integer.",
+
+    r'NumberPlane\s*\([^)]*\.plot\s*\(':
+        "NumberPlane does not have a plot() method. "
+        "Create an Axes object separately and use axes.plot() on that.",
 }
 
 def fix_latex_escapes(code: str) -> str:

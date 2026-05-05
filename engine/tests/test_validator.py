@@ -97,3 +97,9 @@ def test_catches_graph_scene():
     code = "class MyScene(GraphScene):"
     result = validate_manim_code(code)
     assert not result["valid"]
+
+def test_catches_plot_implicit():
+    code = "axes.plot_implicit(lambda x, y: x**2 + y**2 - 5)"
+    result = validate_manim_code(code)
+    assert not result["valid"]
+    assert "plot_implicit" in result["errors"][0].lower()
