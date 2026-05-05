@@ -16,10 +16,28 @@ BANNED_PATTERNS = {
         "Sector does not accept outer_radius. Use Sector(radius=..., angle=...) OR use AnnularSector(inner_radius=..., outer_radius=..., angle=...)",
     r'Sector\s*\([^)]*inner_radius': 
         "Sector does not accept inner_radius. Use AnnularSector(inner_radius=..., outer_radius=...) for ring shapes",
+
+    # Camera frame in wrong scene class
+    r'self\.camera\.frame':
+        "self.camera.frame requires MovingCameraScene not Scene. "
+        "Change class MyScene(Scene) to class MyScene(MovingCameraScene)",
     
-    # LaTeX escape sequence errors  
-    # r'(?<!r)(?<!\\)(?:"[^"\\]*(?:\\.[^"\\]*)*"|\'[^\'\\]*(?:\\.[^\'\\]*)*\')(?<=\\[a-zA-Z])':
-    #    "Possible invalid LaTeX escape. Use raw strings: r'\\alpha' instead of '\\alpha'. Check all strings containing backslashes.",
+    # 3D objects in wrong scene
+    r'(?:Sphere|Cylinder|Cone|Cube|Prism)\s*\(':
+        "3D objects require ThreeDScene. "
+        "Change class MyScene(Scene) to class MyScene(ThreeDScene)",
+    
+    r'set_camera_orientation\s*\(':
+        "set_camera_orientation requires ThreeDScene not Scene",
+    
+    r'begin_ambient_camera_rotation\s*\(':
+        "begin_ambient_camera_rotation requires ThreeDScene not Scene",
+    
+    # Performance traps
+    r'for\s+\w+\s+in\s+range\s*\(\s*(?:3[6-9]\d|[4-9]\d{2}|\d{4,})':
+        "Loop with 360+ iterations detected. "
+        "Use TracedPath or ParametricFunction instead of looping to create paths. "
+        "Never call self.wait() or self.add() inside large loops.",
 }
 
 def fix_latex_escapes(code: str) -> str:
@@ -48,6 +66,53 @@ def fix_latex_escapes(code: str) -> str:
     pattern = r'((?:Math)?Tex)\((["\']{1})((?:(?!\2).)*)\2\)'
     code = re.sub(pattern, make_raw, code)
     return code
+
+def validate_scene_class_consistency(code: str) -> list[str]:
+    """Check that scene class matches the features used."""
+    errors = []
+    
+    uses_camera_frame = bool(re.search(r'self\.camera\.frame', code))
+    uses_3d = bool(re.search(r'(?:Sphere|Cylinder|Cone|Cube|Prism|set_camera_orientation|begin_ambient)', code))
+    
+    class_match = re.search(r'class\s+\w+\s*\(\s*(\w+)\s*\)', code)
+    base_class = class_match.group(1) if class_match else "Scene"
+    
+    if uses_camera_frame and base_class == "Scene":
+        errors.append(
+            f"Class inherits from Scene but uses self.camera.frame. "
+            f"Change to MovingCameraScene."
+        )
+    
+    if uses_3d and base_class == "Scene":
+        errors.append(
+            f"Class inherits from Scene but uses 3D features. "
+            f"Change to ThreeDScene."
+        )
+    
+    return errors
+
+def validate_performance(code: str) -> list[str]:
+    """Check for performance traps."""
+    warnings = []
+    
+    # Check for large loops with self operations inside
+    loop_pattern = re.finditer(
+        r'for\s+\w+\s+in\s+range\s*\((\d+)', code
+    )
+    for match in loop_pattern:
+        count = int(match.group(1))
+        if count > 50:
+            # Check if loop body has self.wait or self.add
+            loop_start = match.start()
+            loop_body = code[loop_start:loop_start + 300]
+            if 'self.wait' in loop_body or 'self.add' in loop_body:
+                warnings.append(
+                    f"Performance trap: loop of {count} iterations with "
+                    f"self.wait() or self.add() will take very long to render. "
+                    f"Use TracedPath, ParametricFunction, or always_redraw instead."
+                )
+    
+    return warnings
 
 def validate_manim_code(code: str) -> dict:
     """
@@ -84,6 +149,20 @@ def validate_manim_code(code: str) -> dict:
     if 'from manim import' not in fixed_code and 'import manim' not in fixed_code:
         warnings.append("Missing manim import — adding automatically.")
         fixed_code = "from manim import *\n" + fixed_code
+
+    # New checks
+    errors.extend(validate_scene_class_consistency(fixed_code))
+    warnings.extend(validate_performance(fixed_code))
+
+    # Auto-fix: add MovingCameraScene if camera.frame used with Scene
+    if (re.search(r'self\.camera\.frame', fixed_code) and 
+        re.search(r'class\s+\w+\s*\(\s*Scene\s*\)', fixed_code)):
+        fixed_code = re.sub(
+            r'(class\s+\w+\s*\()\s*Scene\s*\)',
+            r'\1MovingCameraScene)',
+            fixed_code
+        )
+        warnings.append("Auto-fixed: Changed Scene to MovingCameraScene")
 
     return {
         "valid": len(errors) == 0,

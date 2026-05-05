@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -75,10 +76,12 @@ async def generate_with_fallback(
     prompt: str,
     tier: ModelTier = "standard",
     user_keys: dict | None = None,
+    max_correction_attempts: int = 2,
 ) -> dict:
     """
     If user provides their own keys: use only those, no pool involved.
     Otherwise: use the developer pool with rotation and circuit breaking.
+    Includes an automatic self-correction loop if validation fails.
     """
 
     # Check cache first — zero network either way
@@ -88,18 +91,79 @@ async def generate_with_fallback(
         print(f"[router] Cache hit — no API call needed")
         return {**cached, "cached": True}
 
+    # First attempt — normal generation
+    result = await _generate_once(prompt, tier, user_keys)
+    
+    if "error" in result and "code" not in result:
+        return result
+    
+    code = result.get("code", "")
+    
+    # Validation loop — up to max_correction_attempts retries
+    for attempt in range(max_correction_attempts):
+        validation = validate_manim_code(code)
+        
+        if validation["valid"]:
+            result["code"] = validation["fixed_code"]
+            result["warnings"] = validation.get("warnings", [])
+            print(f"[router] Code valid after {attempt} correction(s)")
+            _save_cache(cache_key, result)
+            return result
+        
+        errors = validation["errors"]
+        print(f"[router] Attempt {attempt+1}: {len(errors)} validation error(s)")
+        print(f"[router] Errors: {errors}")
+        
+        # Build correction prompt
+        error_list = "\n".join(f"- {e}" for e in errors)
+        correction_prompt = f"""The following Manim code has errors:
+
+```python
+{code}
+```
+
+Errors that must be fixed:
+{error_list}
+
+Fix ONLY these errors. Keep the animation identical otherwise.
+Output only the corrected Python code, no explanation.
+"""
+        
+        # Retry with correction prompt
+        correction_result = await _generate_once(
+            correction_prompt, "fast", user_keys
+        )
+        
+        if "code" in correction_result:
+            code = correction_result["code"]
+            result["code"] = code
+            result["corrected"] = True
+            result["correction_attempts"] = attempt + 1
+        else:
+            # Correction failed — return last valid attempt
+            break
+    
+    # Final validation pass
+    final = validate_manim_code(code)
+    result["code"] = final["fixed_code"]
+    result["warnings"] = final.get("warnings", [])
+    _save_cache(cache_key, result)
+    return result
+
+async def _generate_once(prompt: str, tier: ModelTier, user_keys: dict | None) -> dict:
+    """Single generation attempt across all available providers."""
+    
     # USER'S OWN KEYS — bypass pool entirely
     if user_keys and any(user_keys.values()):
-        return await _generate_with_user_keys(prompt, tier, user_keys, cache_key)
+        return await _generate_with_user_keys(prompt, tier, user_keys)
 
     # DEVELOPER POOL — rotation + circuit breaker
-    return await _generate_with_pool(prompt, tier, cache_key)
+    return await _generate_with_pool(prompt, tier)
 
 async def _generate_with_user_keys(
     prompt: str,
     tier: ModelTier,
     user_keys: dict,
-    cache_key: str,
 ) -> dict:
     """Use user's own keys sequentially. No rotation, no pool tracking."""
     provider_order: list[Provider] = ["groq", "gemini", "openai"]
@@ -114,15 +178,17 @@ async def _generate_with_user_keys(
 
         try:
             code = await _call_provider(provider, prompt, model, api_key)
-            validation = validate_manim_code(code)
-            result = {
-                "code": validation["fixed_code"],
+            # Strip markdown fences
+            code = re.sub(r'^```python\s*', '', code.strip())
+            code = re.sub(r'^```\s*', '', code.strip())
+            code = re.sub(r'```\s*$', '', code.strip()).strip()
+            
+            return {
+                "code": code,
                 "provider": provider,
                 "model": model,
                 "source": "user_key",
             }
-            _save_cache(cache_key, result)
-            return result
 
         except asyncio.TimeoutError:
             print(f"[router] {provider} timed out — trying next")
@@ -135,12 +201,11 @@ async def _generate_with_user_keys(
                 print(f"[router] {provider} error: {err[:80]}")
             continue
 
-    return {"error": "All your API keys failed or are exhausted. Check your keys in Settings."}
+    return {"error": "All your API keys failed or are exhausted."}
 
 async def _generate_with_pool(
     prompt: str,
     tier: ModelTier,
-    cache_key: str,
 ) -> dict:
     """Use developer pool with rotation and circuit breaking."""
     pool = get_pool()
@@ -151,8 +216,7 @@ async def _generate_with_pool(
                 "Daily generation limit reached on all providers.\n"
                 "Options:\n"
                 "• Add your own free Groq key in Settings for unlimited use\n"
-                "• Wait until midnight for the daily quota to reset\n"
-                "• Get a free key at console.groq.com — takes 2 minutes"
+                "• Wait until midnight for the daily quota to reset"
             )
         }
 
@@ -170,16 +234,18 @@ async def _generate_with_pool(
 
         try:
             code = await _call_provider(provider, prompt, model, api_key)
-            validation = validate_manim_code(code)
-            result = {
-                "code": validation["fixed_code"],
+            # Strip markdown fences
+            code = re.sub(r'^```python\s*', '', code.strip())
+            code = re.sub(r'^```\s*', '', code.strip())
+            code = re.sub(r'```\s*$', '', code.strip()).strip()
+            
+            pool.record_success(provider)
+            return {
+                "code": code,
                 "provider": provider,
                 "model": model,
                 "source": "developer_pool",
             }
-            pool.record_success(provider)
-            _save_cache(cache_key, result)
-            return result
 
         except asyncio.TimeoutError:
             print(f"[router] {provider} timed out after {TIMEOUT_SECONDS}s — opening circuit")
@@ -196,10 +262,7 @@ async def _generate_with_pool(
             continue
 
     return {
-        "error": (
-            "All providers failed for this request.\n"
-            "Add your own free Groq key in Settings to bypass this."
-        )
+        "error": "All providers failed for this request."
     }
 
 # Keep alias

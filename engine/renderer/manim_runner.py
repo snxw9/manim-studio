@@ -64,26 +64,27 @@ def render_scene(code: str, quality: str = "720p", fmt: str = "mp4") -> dict:
     timeout = QUALITY_TIMEOUTS.get(q_flag, 180)
     resolution = QUALITY_RESOLUTION.get(q_flag, "1280,720")
 
-    # Use a FRESH temp dir for every render — no caching of video
-    # Only LaTeX intermediate files are cached persistently
-    with tempfile.TemporaryDirectory() as tmpdir:
+    # Use a FRESH local temp dir for every render to avoid system temp path issues
+    render_id = hashlib.md5(f"{code}{quality}{fmt}{os.urandom(8)}".encode()).hexdigest()[:12]
+    tmpdir = OUTPUTS_DIR / f"tmp_{render_id}"
+    tmpdir.mkdir(parents=True, exist_ok=True)
+    
+    try:
         # Write scene file
-        code_file = os.path.join(tmpdir, "scene.py")
-        with open(code_file, "w", encoding="utf-8") as f:
-            f.write(code)
+        code_file = tmpdir / "scene.py"
+        code_file.write_text(code, encoding="utf-8")
 
-        # media_dir is the temp dir for VIDEO output
-        # MANIM_TEX_DIR environment variable for persistent LaTeX cache
+        # media_dir is the local temp dir for VIDEO output
         cmd = [
             "manim",
             q_flag,
             "--fps", "30",
             "--resolution", resolution,
             "--format", fmt_actual,
-            "--media_dir", tmpdir,          # fresh every time
+            "--media_dir", str(tmpdir),     # local to project
             "--disable_caching",            # never reuse video cache
             "--progress_bar", "none",
-            code_file,
+            str(code_file),
             class_name,
         ]
 
@@ -160,3 +161,5 @@ def render_scene(code: str, quality: str = "720p", fmt: str = "mp4") -> dict:
             "filename": friendly,
             "size": len(video_bytes),
         }
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)

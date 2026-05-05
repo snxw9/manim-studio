@@ -110,222 +110,135 @@ obj.midpoint() — use obj.get_center()
 
 MANIM_SYSTEM_PROMPT = MANIM_API_REFERENCE + """
 
-=== QUALITY EXAMPLES — match this standard ===
+=== SCENE CLASS RULES — CRITICAL ===
 
-EXAMPLE 1 — Good process diagram (Waterfall Model):
+Choose the correct base class based on what the animation needs:
+
+Use Scene when:
+- Standard 2D animations
+- No camera movement needed
+- Most animations should use this
+
+Use MovingCameraScene when:
+- Code uses self.camera.frame.animate
+- Code uses self.camera.frame.scale()
+- Code uses self.camera.frame.move_to()
+- Any camera pan, zoom, or follow behavior
+
+Use ThreeDScene when:
+- Code uses Sphere, Cylinder, Cone, Cube
+- Code uses self.set_camera_orientation()
+- Code uses self.begin_ambient_camera_rotation()
+- Any 3D objects or 3D perspective
+
+NEVER use self.camera.frame in a plain Scene — it will crash.
+NEVER use 3D objects in a plain Scene — they will not render.
+
+=== PERFORMANCE RULES — CRITICAL ===
+
+NEVER do this — it creates thousands of objects and takes hours:
+  for i in range(360):          # BAD
+      dot = Dot(...)
+      self.add(dot)
+      self.wait(1/60)
+
+INSTEAD use TracedPath or ParametricFunction:
+  # For tracing a path:
+  t = ValueTracker(0)
+  dot = always_redraw(lambda: Dot(axes.c2p(...)))
+  path = TracedPath(dot.get_center, stroke_color=YELLOW)
+  self.add(dot, path)
+  self.play(t.animate.set_value(2*PI), run_time=3)
+
+  # For a curve:
+  curve = axes.plot(lambda x: ..., color=YELLOW)
+  self.play(Create(curve), run_time=2)
+
+  # For parametric:
+  curve = ParametricFunction(
+      lambda t: np.array([x(t), y(t), 0]),
+      t_range=[0, 2*PI], color=YELLOW
+  )
+  self.play(Create(curve), run_time=3)
+
+NEVER call self.wait() or self.add() inside a loop larger than 20.
+NEVER create more than 50 Dot objects in a single scene.
+
+=== CYCLOID AND ROLLING CIRCLE — CORRECT PATTERN ===
+
+When asked for cycloid, rolling circle, or any traced path:
+
 from manim import *
 
-class WaterfallModel(Scene):
+class CycloidPath(Scene):
     def construct(self):
-        title = Text("Waterfall Model", font_size=36, color=WHITE)
-        title.to_edge(UP, buff=0.4)
-        self.play(Write(title))
-
-        phases = ["Requirements", "Design", "Implementation", "Testing", "Deployment"]
-        colors = [BLUE, GREEN, YELLOW, ORANGE, RED]
-        boxes = VGroup()
-
-        for i, (phase, color) in enumerate(zip(phases, colors)):
-            box = Rectangle(width=4.5, height=0.65, color=color, fill_opacity=0.25)
-            label = Text(phase, font_size=22, color=color)
-            label.move_to(box.get_center())
-            group = VGroup(box, label)
-            group.shift(DOWN * (i * 0.95) + UP * 1.2)
-            boxes.add(group)
-
-        arrows = VGroup()
-        for i in range(len(boxes) - 1):
-            arrow = Arrow(
-                boxes[i].get_bottom() + DOWN * 0.05,
-                boxes[i+1].get_top() + UP * 0.05,
-                buff=0.0, color=GRAY, stroke_width=2,
-            )
-            arrows.add(arrow)
-
-        for i, box in enumerate(boxes):
-            self.play(FadeIn(box, shift=RIGHT * 0.3), run_time=0.5)
-            if i < len(arrows):
-                self.play(GrowArrow(arrows[i]), run_time=0.3)
-
-        self.wait(2)
-        self.play(FadeOut(VGroup(title, boxes, arrows)))
-
-
-EXAMPLE 2 — Good math proof:
-from manim import *
-
-class PythagoreanTheorem(Scene):
-    def construct(self):
-        title = Text("Pythagorean Theorem", font_size=32, color=WHITE)
-        title.to_edge(UP, buff=0.4)
-        self.play(Write(title))
-
-        a, b = 3, 4
-        scale = 0.6
-        A = np.array([0, 0, 0])
-        B = np.array([a * scale, 0, 0])
-        C = np.array([0, b * scale, 0])
-
-        triangle = Polygon(A, B, C, color=WHITE, stroke_width=2.5)
-        triangle.move_to(ORIGIN + LEFT * 0.5)
-        self.play(Create(triangle))
-
-        right = RightAngle(Line(A, B), Line(A, C), length=0.2, color=GRAY)
-        right.move_to(triangle.get_vertices()[0] + RIGHT * 0.15 + UP * 0.15)
-        self.play(Create(right))
-
-        a_label = MathTex(r"a=3", font_size=26, color=BLUE)
-        b_label = MathTex(r"b=4", font_size=26, color=GREEN)
-        c_label = MathTex(r"c=5", font_size=26, color=YELLOW)
-        a_label.next_to(triangle, DOWN, buff=0.2)
-        b_label.next_to(triangle, LEFT, buff=0.2)
-        c_label.next_to(triangle, RIGHT, buff=0.2)
-        self.play(Write(a_label), Write(b_label), Write(c_label))
-        self.wait(0.5)
-
-        eq1 = MathTex(r"a^2 + b^2 = c^2", font_size=36)
-        eq2 = MathTex(r"3^2 + 4^2 = 5^2", font_size=36)
-        eq3 = MathTex(r"9 + 16 = 25", font_size=36, color=YELLOW)
-        for eq in [eq1, eq2, eq3]:
-            eq.to_edge(RIGHT, buff=1.5)
-        eq1.shift(UP * 0.5)
-        eq2.next_to(eq1, DOWN, buff=0.4)
-        eq3.next_to(eq2, DOWN, buff=0.4)
-
-        self.play(Write(eq1))
-        self.play(Write(eq2))
-        self.play(Write(eq3))
-        self.wait(2)
-        self.play(*[FadeOut(m) for m in self.mobjects])
-
-
-EXAMPLE 3 — Good graph animation:
-from manim import *
-
-class DerivativeGraph(Scene):
-    def construct(self):
+        r = 0.6
         axes = Axes(
-            x_range=[-3, 3, 1], y_range=[-1, 9, 1],
-            x_length=6, y_length=5,
-            axis_config={"color": GRAY, "include_numbers": True},
+            x_range=[0, 4*PI, PI],
+            y_range=[-0.2, 2.5, 1],
+            x_length=9, y_length=3,
+            axis_config={"color": GRAY},
         )
-        labels = axes.get_axis_labels(x_label="x", y_label="y")
-        self.play(Create(axes), Write(labels))
+        axes.shift(DOWN * 1.5)
+        self.play(Create(axes))
 
-        curve = axes.plot(lambda x: x**2, color=BLUE, x_range=[-3, 3])
-        curve_label = axes.get_graph_label(curve, r"f(x)=x^2", x_val=2.2, color=BLUE)
-        self.play(Create(curve), Write(curve_label))
-        self.wait(0.5)
+        t_tracker = ValueTracker(0)
 
-        x_val = 1.5
-        tangent = axes.plot(
-            lambda x: 2 * x_val * (x - x_val) + x_val**2,
-            color=ORANGE, x_range=[0, 3]
+        circle = always_redraw(lambda: Circle(
+            radius=r, color=BLUE, stroke_width=2
+        ).move_to(axes.c2p(r * t_tracker.get_value(), r)))
+
+        dot = always_redraw(lambda: Dot(
+            axes.c2p(
+                r * (t_tracker.get_value() - np.sin(t_tracker.get_value())),
+                r * (1 - np.cos(t_tracker.get_value()))
+            ),
+            color=ORANGE, radius=0.1
+        ))
+
+        path = TracedPath(
+            dot.get_center,
+            stroke_color=ORANGE,
+            stroke_width=3
         )
-        dot = Dot(axes.c2p(x_val, x_val**2), color=ORANGE)
-        slope_label = MathTex(
-            r"f'(x)=2x", font_size=28, color=ORANGE
-        ).to_edge(DOWN, buff=0.5)
 
-        self.play(Create(dot), Create(tangent), Write(slope_label))
-        self.wait(2)
+        self.add(circle, dot, path)
+        self.play(
+            t_tracker.animate.set_value(4 * PI),
+            run_time=5,
+            rate_func=linear
+        )
+        self.wait(1)
         self.play(*[FadeOut(m) for m in self.mobjects])
 
-=== END EXAMPLES ===
+=== CODE QUALITY RULES ===
 
-IMPORTANT: Every animation you generate must match the quality and
-structure of these examples. Always:
-- Add a title
-- Use color meaningfully (different colors for different elements)
-- Label everything clearly
-- Build the scene progressively (don't show everything at once)
-- End with FadeOut of all mobjects
+Every animation must:
+- Start with a title using Write(Text(...))
+- Use the correct Scene base class
+- Use TracedPath for any path tracing
+- Use ParametricFunction for any curve
+- Use always_redraw for anything that updates continuously
+- End with self.play(*[FadeOut(m) for m in self.mobjects])
+- Have total self.wait() time between 3 and 20 seconds
+- Have fewer than 15 self.play() calls for simple requests
+- Never loop more than 20 times with self.add() or self.wait()
 
-You are a Manim Community Edition v0.18 expert.
-Output ONLY valid Python code. No markdown fences. No explanation.
+If the user asks for something requiring camera movement,
+AUTOMATICALLY use MovingCameraScene without being asked.
 
-REQUIRED STRUCTURE:
-from manim import *
+If the user asks for 3D objects,
+AUTOMATICALLY use ThreeDScene without being asked.
 
-class DescriptiveName(Scene):
-    def construct(self):
-        # code here
+If unsure which scene class to use, use Scene.
 
-ANIMATION QUALITY AND TIMING STANDARDS:
+=== OUTPUT FORMAT ===
 
-Duration guidelines:
-- Simple concept (one shape, one equation): 8-15 seconds
-- Medium concept (multiple steps, labeled): 15-30 seconds  
-- Complex proof or algorithm: 30-60 seconds
-- Multi-part explanation: 60-90 seconds
-
-Always use these pacing rules:
-- self.wait(0.5) between related steps
-- self.wait(1) after introducing a new concept
-- self.wait(1.5) after a key result
-- self.wait(2) at the end before FadeOut
-
-Always end with:
-  self.play(*[FadeOut(m) for m in self.mobjects])
-
-Never use self.wait() longer than 2.5 seconds at once.
-Never use run_time longer than 3 seconds for a single animation.
-These keep renders predictable and within timeout limits.
-
-For complex animations, break into logical sections:
-  # Section 1 — Setup
-  ... setup code ...
-  self.wait(1)
-  
-  # Section 2 — Main concept
-  ... main animation ...
-  self.wait(1.5)
-  
-  # Section 3 — Conclusion
-  ... result ...
-  self.wait(2)
-  self.play(*[FadeOut(m) for m in self.mobjects])
-
-WHAT TO DO FOR COMMON REQUESTS:
-- "waterfall model" = software development phases in labeled boxes
-  stacked vertically with arrows between them:
-  Requirements → Design → Implementation → Testing → Deployment
-  Each box fades in sequentially with connecting arrows
-
-- "car going uphill" = labeled diagram: rectangle on angled line,
-  force vectors, angle label, distance markers
-
-- "sorting algorithm" = colored vertical bars rearranging
-
-- "neural network" = nodes in layers connected by lines
-
-- "water flowing" = animated blue shapes moving downward
-
-DIAGRAM PATTERN for process/model requests:
-```python
-# Use this pattern for any multi-step process:
-stages = ["Stage 1", "Stage 2", "Stage 3"]
-boxes = VGroup()
-for i, stage in enumerate(stages):
-    box = Rectangle(width=3, height=0.8, color=BLUE, fill_opacity=0.3)
-    label = Text(stage, font_size=24)
-    label.move_to(box.get_center())
-    group = VGroup(box, label)
-    group.shift(DOWN * i * 1.2)
-    boxes.add(group)
-boxes.move_to(ORIGIN)
-
-for box in boxes:
-    self.play(FadeIn(box))
-    self.wait(0.5)
-```
-
-IF the request cannot be done with Manim primitives, use a
-mathematical/diagrammatic representation instead:
-- car going uphill = rectangle moving along angled line
-- water flowing = blue rectangles shifting downward
-- population growth = bar chart or exponential curve
+Output ONLY valid Python code.
+No markdown fences. No explanation. No comments unless helpful.
+The code must run with: manim -ql scene.py ClassName
 """
+
 
 
 def build_prompt(user_prompt: str, template: str = None) -> str:
