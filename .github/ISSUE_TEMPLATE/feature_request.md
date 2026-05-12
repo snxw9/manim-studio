@@ -1,0 +1,1 @@
+---\nname: Feature Request\nabout: Suggest something new\n---\n\n**Which platform:** [ ] Web  [ ] Android  [ ] Engine  [ ] All\n\n**What would you like:**\n\n**Why is this useful:**

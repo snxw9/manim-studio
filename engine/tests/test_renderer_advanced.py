@@ -1,7 +1,7 @@
 import pytest
 import os
 import shutil
-from renderer.manim_runner import run_manim
+from renderer.manim_runner import render_scene
 from renderer.code_validator import validate_manim_code
 
 # Sample Manim code that should work
@@ -39,11 +39,9 @@ class TestScene(Scene):
 @pytest.fixture
 def output_dir(tmp_path):
     """Fixture to provide a temporary output directory and set the environment variable."""
-    d = tmp_path / "outputs"
-    d.mkdir()
-    os.environ["MANIM_OUTPUT_DIR"] = str(d)
-    yield str(d)
-    # Cleanup is handled by tmp_path
+    # render_scene uses Path(__file__).parent.parent / "outputs"
+    # so we don't really need to set MANIM_OUTPUT_DIR, but we'll keep it for other tests if any.
+    yield str(tmp_path)
 
 def test_validate_valid_code():
     result = validate_manim_code(VALID_CODE)
@@ -61,25 +59,16 @@ def test_validate_banned_method():
     assert any("Invalid Manim method" in err for err in result["errors"])
 
 @pytest.mark.skipif(shutil.which("manim") is None, reason="manim CLI not found")
-def test_run_manim_success(output_dir):
+def test_render_scene_success(output_dir):
     # This test actually runs manim, so it might be slow.
-    # It requires manim and its dependencies (ffmpeg, etc.) to be installed.
-    output_path = run_manim(VALID_CODE, quality="480p")
-    assert os.path.exists(output_path)
-    assert output_path.endswith(".mp4")
-    assert "TestScene_480p.mp4" in output_path
+    result = render_scene(VALID_CODE, quality="480p")
+    assert "video" in result
+    assert result["mimeType"] == "video/mp4"
+    assert result["className"] == "TestScene"
 
 @pytest.mark.skipif(shutil.which("manim") is None, reason="manim CLI not found")
-def test_run_manim_invalid_code(output_dir):
+def test_render_scene_invalid_code(output_dir):
     with pytest.raises(RuntimeError):
-        # This should fail because the code is valid Python but invalid Manim (missing self in play)
-        invalid_manim = """
-from manim import *
-class FailScene(Scene):
-    def construct(self):
-        self.play(Create(Circle()))
-"""
-        # Wait, the above is actually valid. Let's make it invalid for Manim.
         invalid_manim = """
 from manim import *
 class FailScene(Scene):
@@ -88,4 +77,4 @@ class FailScene(Scene):
         # Non-existent manim function
         self.play(NonExistentEffect(circle))
 """
-        run_manim(invalid_manim, quality="480p")
+        render_scene(invalid_manim, quality="480p")

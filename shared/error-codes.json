@@ -1,0 +1,137 @@
+{
+  "version": "1.0.0",
+  "errors": [
+    {
+      "code": "GEN_001",
+      "pattern": "ParametricSurface",
+      "title": "Outdated Manim Feature",
+      "what": "The AI used a Manim feature that no longer exists in the current version.",
+      "why": "ParametricSurface was removed from Manim in v0.17 and replaced with Surface(). The AI learned from old examples.",
+      "action": "Click 'Try Again' — the validator will auto-fix this automatically.",
+      "source": "generated_code",
+      "canRetry": true,
+      "shouldReport": false
+    },
+    {
+      "code": "GEN_002",
+      "pattern": "object has no attribute 'frame'",
+      "title": "Wrong Scene Type",
+      "what": "The animation tried to move the camera but used the wrong scene type.",
+      "why": "Camera movement requires MovingCameraScene instead of Scene. The AI made a mistake choosing the base class.",
+      "action": "Click 'Try Again' — the validator now catches this automatically.",
+      "source": "generated_code",
+      "canRetry": true,
+      "shouldReport": false
+    },
+    {
+      "code": "GEN_003",
+      "pattern": "NameError: name '(\\w+)' is not defined",
+      "title": "Unknown Manim Feature",
+      "what": "The AI used a Manim class or function that doesn't exist.",
+      "why": "The AI invented or misremembered a Manim feature name. This is a known limitation of AI code generation.",
+      "action": "Click 'Try Again' to generate fresh code. If it keeps failing, try rephrasing your prompt to be more specific about what you want to see.",
+      "source": "generated_code",
+      "canRetry": true,
+      "shouldReport": false
+    },
+    {
+      "code": "GEN_004",
+      "pattern": "SyntaxError",
+      "title": "Code Syntax Error",
+      "what": "The generated code has a Python syntax error and cannot run.",
+      "why": "The AI produced malformed code — this sometimes happens with complex requests.",
+      "action": "Click 'Try Again'. If you edited the code yourself, check for missing colons, brackets, or quotes in the Code tab.",
+      "source": "generated_code",
+      "canRetry": true,
+      "shouldReport": false
+    },
+    {
+      "code": "SYS_001",
+      "pattern": "latex.*failed|check your latex|LaTeX Error",
+      "title": "LaTeX Error",
+      "what": "The math equation renderer (LaTeX) failed to process a formula.",
+      "why": "Either LaTeX is not properly installed, a required package is missing, or the formula contains invalid syntax.",
+      "action": "Open MiKTeX Console and click 'Check for updates' to install missing packages. Then try again. If the problem persists, report this to the developer.",
+      "source": "engine",
+      "canRetry": true,
+      "shouldReport": true
+    },
+    {
+      "code": "SYS_002",
+      "pattern": "timed out after \\d+s",
+      "title": "Render Timed Out",
+      "what": "The animation took too long to render and was stopped.",
+      "why": "Complex animations take more time at higher quality settings. The current quality setting may be too high for this animation.",
+      "action": "Try a lower quality setting (480p or 720p) and render again. If the animation is very complex, it may just need more time.",
+      "source": "engine",
+      "canRetry": true,
+      "shouldReport": false
+    },
+    {
+      "code": "SYS_003",
+      "pattern": "ECONNREFUSED|engine.*offline|Engine is offline",
+      "title": "Engine Offline",
+      "what": "The rendering engine is not running.",
+      "why": "The Python engine that processes and renders animations has stopped or was never started.",
+      "action": "Double-click START.bat in your project folder to restart everything. The green dot in the bottom bar will turn on when it's ready.",
+      "source": "engine",
+      "canRetry": false,
+      "shouldReport": false
+    },
+    {
+      "code": "SYS_004",
+      "pattern": "quota|rate.?limit|429",
+      "title": "AI Quota Exhausted",
+      "what": "The AI service has reached its usage limit for today.",
+      "why": "Free AI APIs have daily limits. All available providers are currently at their limit.",
+      "action": "Wait a few minutes and try again — limits reset frequently. Or add your own free Groq API key in Settings for unlimited generations.",
+      "source": "engine",
+      "canRetry": true,
+      "shouldReport": false
+    },
+    {
+      "code": "GEN_005",
+      "pattern": "No Scene class found|Missing construct",
+      "title": "Invalid Animation Structure",
+      "what": "The generated code is missing required parts to be a valid animation.",
+      "why": "Every Manim animation needs a class that extends Scene and a construct() method. The AI omitted one of these.",
+      "action": "Click 'Try Again' for a fresh attempt.",
+      "source": "generated_code",
+      "canRetry": true,
+      "shouldReport": false
+    },
+    {
+      "code": "GEN_006",
+      "pattern": "TypeError.*got.*unexpected keyword argument",
+      "title": "Invalid Property",
+      "what": "The AI gave an invalid property to a Manim shape or object.",
+      "why": "Different Manim objects accept different properties. The AI used one that doesn't apply here (e.g. width= on a Circle).",
+      "action": "Click 'Try Again' — the validator will catch this automatically.",
+      "source": "generated_code",
+      "canRetry": true,
+      "shouldReport": false
+    },
+    {
+      "code": "SYS_005",
+      "pattern": "No output file found|No mp4 found",
+      "title": "No Video Produced",
+      "what": "The animation ran but no video file was created.",
+      "why": "The animation may have had no visible content, or an issue occurred during video encoding.",
+      "action": "Make sure the animation has at least one self.play() call with a visible object. Try again or simplify your prompt.",
+      "source": "engine",
+      "canRetry": true,
+      "shouldReport": true
+    },
+    {
+      "code": "GEN_007",
+      "pattern": "Axes.*has no attribute 'plot_implicit'|plot_implicit",
+      "title": "Unsupported Plot Type",
+      "what": "The AI tried to create an implicit function plot which Manim does not support.",
+      "why": "Manim can only plot y=f(x) functions and parametric curves. Implicit equations like f(x,y)=0 require a different approach.",
+      "action": "Click 'Try Again'. The validator will now catch this. Or rephrase your prompt — instead of 'plot x²+y²=5' try 'draw a circle with radius √5'.",
+      "source": "generated_code",
+      "canRetry": true,
+      "shouldReport": false
+    }
+  ]
+}
