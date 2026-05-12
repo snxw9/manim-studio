@@ -1,1 +1,1 @@
-{"uses": 1, "current_index": 0, "exhausted": [], "circuit_open": {}, "reset_date": "2026-05-05"}
+{"uses": 0, "current_index": 0, "exhausted": [], "circuit_open": {"groq": 1777981476.6284876, "gemini": 1777981484.6371925, "openai": 1777981492.643773}, "reset_date": "2026-05-05"}
