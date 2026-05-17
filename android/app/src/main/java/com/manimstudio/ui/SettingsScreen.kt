@@ -19,15 +19,13 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.manimstudio.ai.ApiKeyManager
-import com.manimstudio.ai.GroqClient
-import kotlinx.coroutines.launch
+import androidx.core.net.toUri
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    
+
     var groqKey by remember { mutableStateOf(ApiKeyManager.getGroqKey(context)) }
     var geminiKey by remember { mutableStateOf(ApiKeyManager.getGeminiKey(context)) }
     var openaiKey by remember { mutableStateOf(ApiKeyManager.getOpenAIKey(context)) }
@@ -89,7 +87,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.clickable {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://console.groq.com/keys")))
+                                context.startActivity(Intent(Intent.ACTION_VIEW,
+                                    "https://console.groq.com/keys".toUri()))
                             }
                         )
                     }
