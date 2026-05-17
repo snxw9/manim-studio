@@ -74,5 +74,6 @@ desktop.ini
 # --- Temp / Logs ---
 C:/manim_tmp/
 *.log
+*.hprof
 tmp/
 temp/
