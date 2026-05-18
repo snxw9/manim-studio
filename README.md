@@ -57,3 +57,12 @@ manim-studio/
 ## Contributing
 
 See docs/CONTEXT.md for full architecture documentation.
+
+> Task :app:compileDebugKotlin
+e: file:///C:/Users/Abdulfatai/Documents/manim-studio/android/app/src/main/java/com/manimstudio/app/ui/settings/SettingsScreen.kt:9:47 Unresolved reference 'Visibility'.
+e: file:///C:/Users/Abdulfatai/Documents/manim-studio/android/app/src/main/java/com/manimstudio/app/ui/settings/SettingsScreen.kt:10:47 Unresolved reference 'VisibilityOff'.
+e: file:///C:/Users/Abdulfatai/Documents/manim-studio/android/app/src/main/java/com/manimstudio/app/ui/settings/SettingsScreen.kt:102:69 Unresolved reference 'VisibilityOff'.
+e: file:///C:/Users/Abdulfatai/Documents/manim-studio/android/app/src/main/java/com/manimstudio/app/ui/settings/SettingsScreen.kt:102:102 Unresolved reference 'Visibility'.
+
+> Task :app:compileDebugKotlin FAILED
+
