@@ -15,11 +15,12 @@ private const val TAG = "ProotEngine"
  * Architecture:
  *   /data/data/com.manimstudio.app/files/
  *     usr/          ← Alpine Linux rootfs unpacked here
- *       bin/proot   ← proot binary
  *       bin/python3 ← Python 3.11
  *       lib/        ← Cairo, Pango, etc
  *     home/manim/   ← Manim working directory
  *     renders/      ← Output videos saved here
+ *   /data/app/.../lib/
+ *     libproot.so   ← PRoot binary (bundled)
  */
 class ProotEngine(private val context: Context) {
 
@@ -27,7 +28,7 @@ class ProotEngine(private val context: Context) {
     val usrDir: File = File(filesDir, "usr")
     val homeDir: File = File(filesDir, "home/manim")
     val rendersDir: File = File(filesDir, "renders")
-    val prootBin: File = File(filesDir, "usr/bin/proot")
+    val prootBin: File = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
     val pythonBin: File = File(filesDir, "usr/bin/python3")
 
     val isInstalled: Boolean
@@ -85,18 +86,24 @@ class ProotEngine(private val context: Context) {
             "-b", "/proc",
             "-b", "/sys",
             "-b", "${rendersDir.absolutePath}:/renders",
+            "-b", "${usrDir.absolutePath}/tmp:/tmp",
+            "-b", "${homeDir.absolutePath}:${homeDir.absolutePath}", // <-- NEW: Make the home folder visible to Linux!
             "-w", workDir,
         ) + command
     }
 
     private fun buildEnvironment(extra: Map<String, String>): Map<String, String> {
+        val nativeLibsDir = context.applicationInfo.nativeLibraryDir
+        
         return mapOf(
             "HOME" to homeDir.absolutePath,
             "PATH" to "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin",
             "TERM" to "xterm-256color",
             "LANG" to "en_US.UTF-8",
             "PREFIX" to usrDir.absolutePath,
-            "TMPDIR" to "${usrDir.absolutePath}/tmp",
+            "TMPDIR" to "/tmp",                               // <-- Tell Python to use /tmp
+            "PROOT_TMP_DIR" to "${usrDir.absolutePath}/tmp",  // <-- Tell PRoot where to put its engine temp files
+            "PROOT_LOADER" to "$nativeLibsDir/libproot-loader.so"
         ) + extra
     }
 

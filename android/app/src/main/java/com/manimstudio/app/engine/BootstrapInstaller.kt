@@ -34,90 +34,86 @@ class BootstrapInstaller(
         .build()
 
     // Alpine Linux minimal rootfs for arm64
-    // This contains: musl libc, busybox, apk package manager
     private val ALPINE_ROOTFS_URL =
         "https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/aarch64/" +
         "alpine-minirootfs-3.19.1-aarch64.tar.gz"
-
-    // proot static binary for Android arm64
-    // From the proot-distro project, tested on Android
-    private val PROOT_URL =
-        "https://github.com/termux/proot/releases/download/v5.3.0/" +
-        "proot-aarch64"
 
     suspend fun install(): InstallResult = withContext(Dispatchers.IO) {
         try {
             engine.ensureDirs()
 
-            // Stage 1: Download proot binary
-            onProgress(InstallProgress("Downloading core files", 5, "proot binary"))
-            val prootFile = downloadFile(PROOT_URL, "proot-aarch64")
-                ?: return@withContext InstallResult.Error("Failed to download proot")
-            prootFile.copyTo(engine.prootBin, overwrite = true)
-            engine.prootBin.setExecutable(true)
-            Log.i(TAG, "proot installed at ${engine.prootBin}")
+            // Stage 1: Download Alpine rootfs with real-time UI tracking
+            onProgress(InstallProgress("Downloading Linux environment", 0, "Connecting..."))
+            val rootfsTar = downloadFile(
+                url = ALPINE_ROOTFS_URL, 
+                filename = "alpine-rootfs.tar.gz",
+                baseProgress = 0,
+                progressRange = 30,
+                stageName = "Downloading Linux environment"
+            ) ?: return@withContext InstallResult.Error("Failed to download Alpine rootfs")
 
-            // Stage 2: Download Alpine rootfs
-            onProgress(InstallProgress("Downloading Linux environment", 15, "Alpine Linux (~5MB)"))
-            val rootfsTar = downloadFile(ALPINE_ROOTFS_URL, "alpine-rootfs.tar.gz")
-                ?: return@withContext InstallResult.Error("Failed to download Alpine rootfs")
-
-            // Stage 3: Extract rootfs
+            // Stage 2: Extract rootfs
             onProgress(InstallProgress("Setting up Linux environment", 30, "Extracting files..."))
             extractTarGz(rootfsTar, engine.usrDir)
             rootfsTar.delete()
             Log.i(TAG, "Alpine rootfs extracted to ${engine.usrDir}")
 
-            // Stage 4: Configure Alpine package manager
-            onProgress(InstallProgress("Configuring package manager", 40, "Setting up apk..."))
+            // Stage 3: Configure Alpine package manager & FIX DNS
+            onProgress(InstallProgress("Configuring package manager", 35, "Setting up network and apk..."))
             setupAlpineRepos()
 
-            // Stage 5: Install Python + Cairo + Pango + FFmpeg
-            onProgress(InstallProgress("Installing Python 3.11", 45, "This may take a few minutes..."))
+            // Stage 4: Install System Packages + Hidden Pango Dependencies
+            onProgress(InstallProgress("Installing system packages", 45, "Downloading system libraries..."))
             val (pyExit, pyOut) = engine.exec(
                 listOf("/sbin/apk", "add", "--no-cache",
                     "python3", "py3-pip",
-                    "cairo", "pango",
+                    "py3-setuptools", "py3-wheel",
+                    "py3-cairo", "py3-cairo-dev",
+                    "pango", "pango-dev",
+                    "harfbuzz-dev", "freetype-dev", "glib-dev", // Pango's hidden C-dependencies
+                    "cairo", "cairo-dev",
                     "ffmpeg",
-                    "gcc", "python3-dev", "musl-dev",
+                    "pkgconfig", "gcc", "g++", 
+                    "python3-dev", "musl-dev",
                     "libffi-dev", "openssl-dev",
-                    "font-dejavu",
-                    "texmf-dist-latexrecommended",
+                    "font-dejavu"
                 ),
                 onOutput = { line ->
                     if (line.contains("Installing") || line.contains("Fetching")) {
-                        Log.d(TAG, "apk: $line")
+                        // Keep UI progress bar moving during massive apk download
                     }
                 }
             )
             if (pyExit != 0) {
-                return@withContext InstallResult.Error("Failed to install packages: $pyOut")
+                // Pass full string straight to the UI
+                return@withContext InstallResult.Error("APK Error:\n$pyOut") 
             }
-            Log.i(TAG, "System packages installed")
 
-            // Stage 6: Install pycairo + manimpango
-            onProgress(InstallProgress("Installing Cairo Python bindings", 65,
-                "pycairo + manimpango..."))
-            val (cairoExit, cairoOut) = engine.exec(
-                listOf("/usr/bin/pip3", "install", "--no-cache-dir",
-                    "pycairo", "manimpango")
+            // Stage 5: Pre-install build tools via pip globally
+            onProgress(InstallProgress("Preparing Python builder", 60, "Installing Cython..."))
+            val (toolsExit, toolsOut) = engine.exec(
+                listOf("/usr/bin/pip3", "install", "--no-cache-dir", "--break-system-packages",
+                    "Cython", "numpy<2.0.0"
+                )
             )
-            if (cairoExit != 0) {
-                return@withContext InstallResult.Error("Failed to install pycairo: $cairoOut")
+            if (toolsExit != 0) {
+                return@withContext InstallResult.Error("Cython Error:\n$toolsOut")
             }
 
-            // Stage 7: Install Manim
-            onProgress(InstallProgress("Installing Manim", 75,
-                "Mathematical animation engine..."))
-            val (manimExit, manimOut) = engine.exec(
-                listOf("/usr/bin/pip3", "install", "--no-cache-dir", "manim")
+            // Stage 6: Compile manimpango and install manim
+            onProgress(InstallProgress("Installing Manim", 70, "Compiling manimpango..."))
+            val (pipExit, pipOut) = engine.exec(
+                listOf("/usr/bin/pip3", "install", "--no-cache-dir", "--break-system-packages",
+                    "--no-build-isolation", // Force pip to use the Cython we just installed
+                    "manimpango",
+                    "manim"
+                )
             )
-            if (manimExit != 0) {
-                return@withContext InstallResult.Error("Failed to install Manim: $manimOut")
+            if (pipExit != 0) {
+                return@withContext InstallResult.Error("Pip Manim Error:\n$pipOut")
             }
-            Log.i(TAG, "Manim installed successfully")
 
-            // Stage 8: Verify installation
+            // Stage 7: Verify installation
             onProgress(InstallProgress("Verifying installation", 90, "Testing Manim..."))
             val (verifyExit, verifyOut) = engine.exec(
                 listOf("/usr/bin/python3", "-c", "import manim; print(manim.__version__)")
@@ -125,9 +121,8 @@ class BootstrapInstaller(
             if (verifyExit != 0) {
                 return@withContext InstallResult.Error("Manim verification failed: $verifyOut")
             }
-            Log.i(TAG, "Manim version: $verifyOut")
 
-            // Stage 9: Mark installation complete
+            // Stage 8: Mark installation complete
             File(engine.filesDir, ".installed").writeText(verifyOut.trim())
             onProgress(InstallProgress("Complete", 100, "Manim ${verifyOut.trim()} ready"))
 
@@ -139,16 +134,51 @@ class BootstrapInstaller(
         }
     }
 
-    private fun downloadFile(url: String, filename: String): File? {
-        return try {
+    private suspend fun downloadFile(
+        url: String, 
+        filename: String,
+        baseProgress: Int,
+        progressRange: Int,
+        stageName: String
+    ): File? = withContext(Dispatchers.IO) {
+        try {
             val request = Request.Builder().url(url).build()
             val response = client.newCall(request).execute()
-            if (!response.isSuccessful) return null
+            if (!response.isSuccessful) return@withContext null
 
+            val body = response.body ?: return@withContext null
+            val totalBytes = body.contentLength()
             val file = File(engine.filesDir, filename)
-            response.body?.byteStream()?.use { input ->
+
+            body.byteStream().use { input ->
                 FileOutputStream(file).use { output ->
-                    input.copyTo(output)
+                    val buffer = ByteArray(8 * 1024)
+                    var bytesCopied = 0L
+                    var bytes = input.read(buffer)
+                    var lastPercent = -1
+
+                    while (bytes >= 0) {
+                        output.write(buffer, 0, bytes)
+                        bytesCopied += bytes
+                        
+                        if (totalBytes > 0) {
+                            val downloadedPct = ((bytesCopied.toDouble() / totalBytes.toDouble()) * 100).toInt()
+                            // Only update UI every 2% to avoid overwhelming the Compose thread
+                            if (downloadedPct != lastPercent && downloadedPct % 2 == 0) {
+                                lastPercent = downloadedPct
+                                val overallProgress = baseProgress + (downloadedPct * progressRange / 100)
+                                val mbDownloaded = String.format("%.1f", bytesCopied.toDouble() / (1024 * 1024))
+                                val mbTotal = String.format("%.1f", totalBytes.toDouble() / (1024 * 1024))
+                                
+                                onProgress(InstallProgress(
+                                    stage = stageName, 
+                                    percent = overallProgress, 
+                                    detail = "$mbDownloaded MB / $mbTotal MB"
+                                ))
+                            }
+                        }
+                        bytes = input.read(buffer)
+                    }
                 }
             }
             file
@@ -159,8 +189,6 @@ class BootstrapInstaller(
     }
 
     private fun extractTarGz(tarGz: File, destDir: File) {
-        // Use Android's built-in tar via Runtime
-        // Alpine rootfs must be extracted preserving symlinks
         val process = ProcessBuilder(
             "tar", "xzf", tarGz.absolutePath,
             "-C", destDir.absolutePath,
@@ -170,13 +198,24 @@ class BootstrapInstaller(
     }
 
     private suspend fun setupAlpineRepos() {
+        // FIX: Android doesn't have a standard /etc/resolv.conf, meaning PRoot has no DNS.
+        // We MUST inject one so `apk` knows how to connect to the internet.
+        val resolvFile = File(engine.usrDir, "etc/resolv.conf")
+        resolvFile.parentFile?.mkdirs()
+        resolvFile.writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
+
         val reposFile = File(engine.usrDir, "etc/apk/repositories")
         reposFile.parentFile?.mkdirs()
         reposFile.writeText(
             "https://dl-cdn.alpinelinux.org/alpine/v3.19/main\n" +
             "https://dl-cdn.alpinelinux.org/alpine/v3.19/community\n"
         )
-        // Update package list
-        engine.exec(listOf("/sbin/apk", "update"))
+        
+        // We also need to check the exit code. If the internet drops here, 
+        // we want it to crash loudly, not fail silently.
+        val (exitCode, output) = engine.exec(listOf("/sbin/apk", "update"))
+        if (exitCode != 0) {
+            throw Exception("Failed to update Alpine repositories. Check internet connection.\nOutput: $output")
+        }
     }
 }

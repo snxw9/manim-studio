@@ -1,7 +1,7 @@
-package com.manimstudio.ui
+package com.manimstudio.app.ui.settings
 
 import android.content.Intent
-import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -32,7 +32,6 @@ fun SettingsScreen(onBack: () -> Unit) {
     
     var showGroqKey by remember { mutableStateOf(false) }
     var testStatus by remember { mutableStateOf<String?>(null) }
-    var isTesting by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -115,7 +114,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.clickable {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com")))
+                                context.startActivity(Intent(Intent.ACTION_VIEW,
+                                    "https://aistudio.google.com".toUri()))
                             }
                         )
                     }
@@ -136,7 +136,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.clickable {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://platform.openai.com/api-keys")))
+                                context.startActivity(Intent(Intent.ACTION_VIEW,
+                                    "https://platform.openai.com/api-keys".toUri()))
                             }
                         )
                     }
@@ -172,9 +173,3 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
     }
 }
-
-// Extension function for clickable Text
-@Composable
-fun Modifier.clickable(onClick: () -> Unit): Modifier = this.then(
-    androidx.compose.foundation.clickable(onClick = onClick)
-)

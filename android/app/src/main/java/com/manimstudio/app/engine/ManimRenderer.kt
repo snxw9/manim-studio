@@ -59,7 +59,7 @@ class ManimRenderer(
             "--media_dir", "/renders",
             "--disable_caching",
             "--progress_bar", "none",
-            sceneFile.absolutePath,
+            sceneFile.name, // <-- FIX: Use just the filename instead of the absolute path
             className,
         )
 

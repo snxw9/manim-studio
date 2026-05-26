@@ -15,6 +15,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import com.manimstudio.app.engine.SetupState
 
 @Composable
@@ -23,6 +28,7 @@ fun SetupScreen(
     onStartSetup: () -> Unit,
     onRetry: () -> Unit,
     onTestRender: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val backgroundColor = Color(0xFF0D0D0D)
     val orangeAccent = Color(0xFFE65100)
@@ -35,6 +41,16 @@ fun SetupScreen(
             .background(backgroundColor),
         contentAlignment = Alignment.Center,
     ) {
+        // Settings Button (Top End)
+        IconButton(
+            onClick = onOpenSettings,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+        ) {
+            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = textMuted)
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -267,20 +283,33 @@ private fun ErrorContent(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxWidth(),
     ) {
         Text(text = "Setup failed", fontSize = 18.sp, color = Color(0xFFEF4444))
-        Text(text = "Check your internet connection and try again.",
-            fontSize = 14.sp, color = textMuted, textAlign = TextAlign.Center)
+        Text(
+            text = "Check your internet connection and try again.",
+            fontSize = 14.sp,
+            color = textMuted,
+            textAlign = TextAlign.Center
+        )
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFF1A1A1A))
-                .padding(12.dp)
-        ) {
-            Text(text = error.takeLast(300), fontSize = 11.sp,
-                color = Color(0xFF666666), fontFamily = FontFamily.Monospace)
+        SelectionContainer {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF1A1A1A))
+                    .padding(12.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = error,
+                    fontSize = 12.sp,
+                    color = Color(0xFF666666),
+                    fontFamily = FontFamily.Monospace
+                )
+            }
         }
 
         Button(
