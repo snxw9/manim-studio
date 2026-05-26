@@ -1,7 +1,7 @@
-package com.manimstudio.ui
+package com.manimstudio.app.ui.settings
 
 import android.content.Intent
-import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -19,22 +19,19 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.manimstudio.ai.ApiKeyManager
-import com.manimstudio.ai.GroqClient
-import kotlinx.coroutines.launch
+import androidx.core.net.toUri
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    
+
     var groqKey by remember { mutableStateOf(ApiKeyManager.getGroqKey(context)) }
     var geminiKey by remember { mutableStateOf(ApiKeyManager.getGeminiKey(context)) }
     var openaiKey by remember { mutableStateOf(ApiKeyManager.getOpenAIKey(context)) }
     
     var showGroqKey by remember { mutableStateOf(false) }
     var testStatus by remember { mutableStateOf<String?>(null) }
-    var isTesting by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -89,7 +86,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.clickable {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://console.groq.com/keys")))
+                                context.startActivity(Intent(Intent.ACTION_VIEW,
+                                    "https://console.groq.com/keys".toUri()))
                             }
                         )
                     }
@@ -116,7 +114,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.clickable {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com")))
+                                context.startActivity(Intent(Intent.ACTION_VIEW,
+                                    "https://aistudio.google.com".toUri()))
                             }
                         )
                     }
@@ -137,7 +136,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.clickable {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://platform.openai.com/api-keys")))
+                                context.startActivity(Intent(Intent.ACTION_VIEW,
+                                    "https://platform.openai.com/api-keys".toUri()))
                             }
                         )
                     }
@@ -173,9 +173,3 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
     }
 }
-
-// Extension function for clickable Text
-@Composable
-fun Modifier.clickable(onClick: () -> Unit): Modifier = this.then(
-    androidx.compose.foundation.clickable(onClick = onClick)
-)
