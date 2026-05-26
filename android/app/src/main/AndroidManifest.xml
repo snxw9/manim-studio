@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
+        android:name=".ManimStudioApp"
         android:allowBackup="true"
         android:label="Manim Studio"
         android:supportsRtl="true"
