@@ -5,25 +5,23 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.unit.sp
-import com.manimstudio.app.engine.RenderResult
+import androidx.compose.ui.graphics.Color
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.manimstudio.app.engine.SetupViewModel
+import com.manimstudio.app.ui.screens.SettingsScreen
+import com.manimstudio.app.ui.screens.StudioScreen
 import com.manimstudio.app.ui.setup.SetupScreen
+import com.manimstudio.app.ui.theme.ManimStudioTheme
+import java.io.File
 
 class MainActivity : ComponentActivity() {
 
@@ -33,56 +31,61 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // FAST CHECK: Does the installation VIP pass exist?
+        val isInstalled = File(filesDir, ".installed").exists()
+        
+        // The traffic cop decides where to start
+        val startScreen = if (isInstalled) "studio" else "setup"
+
         setContent {
-            MaterialTheme {
+            ManimStudioTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    val state by viewModel.state.collectAsState()
                     
-                    // State to hold our popup data
-                    var renderResultDialog by remember { mutableStateOf<RenderResult?>(null) }
+                    val navController = rememberNavController()
+                    val setupState by viewModel.state.collectAsState()
 
-                    SetupScreen(
-                        state = state,
-                        onStartSetup = { viewModel.startInstallation() },
-                        onRetry = { viewModel.retrySetup() },
-                        onTestRender = {
-                            viewModel.testRender { result ->
-                                runOnUiThread {
-                                    // Trigger the popup instead of a toast
-                                    renderResultDialog = result
-                                }
-                            }
-                        },
-                        onOpenSettings = { 
-                            // You can wire up your settings navigation here later.
-                            // For now, this empty block just satisfies the compiler!
+                    NavHost(navController = navController, startDestination = startScreen) {
+                        
+                        // ROUTE 1: Setup
+                        composable("setup") {
+                            SetupScreen(
+                                state = setupState,
+                                onStartSetup = { viewModel.startInstallation() },
+                                onRetry = { viewModel.retrySetup() },
+                                onTestRender = {
+                                    navController.navigate("studio") {
+                                        popUpTo("setup") { inclusive = true }
+                                    }
+                                },
+                                onOpenSettings = {}
+                            )
                         }
-                    )
 
-                    // The actual popup dialog
-                    renderResultDialog?.let { result ->
-                        AlertDialog(
-                            onDismissRequest = { renderResultDialog = null },
-                            title = { Text(if (result.success) "Render Successful!" else "Render Failed") },
-                            text = {
-                                Text(
-                                    text = if (result.success) {
-                                        "Time: ${result.renderTimeMs}ms\nSaved to:\n${result.videoFile?.absolutePath}"
-                                    } else {
-                                        result.errorMessage ?: "Unknown error"
-                                    },
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 12.sp,
-                                    // Makes the text scrollable if the error is huge
-                                    modifier = Modifier.verticalScroll(rememberScrollState())
-                                )
-                            },
-                            confirmButton = {
-                                TextButton(onClick = { renderResultDialog = null }) {
-                                    Text("Close", fontFamily = FontFamily.Monospace)
-                                }
-                            }
-                        )
+                        // ROUTE 2: Main Studio
+                        composable("studio") {
+                            StudioScreen(
+                                onNavigateToSettings = { navController.navigate("settings") },
+                                onNavigateToGallery = { navController.navigate("gallery") },
+                                onNavigateToTemplates = { navController.navigate("templates") }
+                            )
+                        }
+
+                        // ROUTE 3: Settings Screen
+                        composable("settings") {
+                            SettingsScreen(
+                                onBackClick = { navController.popBackStack() } 
+                            )
+                        }
+
+                        // ROUTE 4: Gallery Placeholder
+                        composable("gallery") {
+                            Box(modifier = Modifier.fillMaxSize().background(Color.Black))
+                        }
+
+                        // ROUTE 5: Templates Placeholder
+                        composable("templates") {
+                            Box(modifier = Modifier.fillMaxSize().background(Color.Black))
+                        }
                     }
                 }
             }
