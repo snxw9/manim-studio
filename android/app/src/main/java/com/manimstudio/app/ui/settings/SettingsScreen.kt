@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -99,7 +99,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         visualTransformation = if (showGroqKey) VisualTransformation.None else PasswordVisualTransformation(),
                         trailingIcon = {
                             IconButton(onClick = { showGroqKey = !showGroqKey }) {
-                                Icon(if (showGroqKey) Icons.Default.VisibilityOff else Icons.Default.Visibility, "")
+                                Icon(if (showGroqKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility, "")
                             }
                         }
                     )

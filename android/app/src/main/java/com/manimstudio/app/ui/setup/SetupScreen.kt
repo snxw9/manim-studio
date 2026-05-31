@@ -16,7 +16,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -48,7 +48,7 @@ fun SetupScreen(
                 .align(Alignment.TopEnd)
                 .padding(16.dp)
         ) {
-            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = textMuted)
+            Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = textMuted)
         }
 
         Column(

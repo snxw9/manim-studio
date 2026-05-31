@@ -8,50 +8,68 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.manimstudio.app.data.PreferencesManager
 import com.manimstudio.app.engine.SetupViewModel
+import com.manimstudio.app.ui.screens.EditorScreen
+import com.manimstudio.app.ui.screens.GalleryScreen
 import com.manimstudio.app.ui.screens.SettingsScreen
 import com.manimstudio.app.ui.screens.StudioScreen
+import com.manimstudio.app.ui.screens.TemplatesScreen
 import com.manimstudio.app.ui.setup.SetupScreen
 import com.manimstudio.app.ui.theme.ManimStudioTheme
 import java.io.File
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.EaseInCubic
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.tween
+import com.manimstudio.app.viewmodel.StudioViewModel
+
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: SetupViewModel by viewModels()
+    private val setupViewModel: SetupViewModel by viewModels()
+    private val studioViewModel: StudioViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // FAST CHECK: Does the installation VIP pass exist?
         val isInstalled = File(filesDir, ".installed").exists()
-        
-        // The traffic cop decides where to start
         val startScreen = if (isInstalled) "studio" else "setup"
 
         setContent {
+            val context = LocalContext.current
+            val themePreference by PreferencesManager.getTheme(context).collectAsState(initial = "System")
+
             ManimStudioTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background 
+                ) {
                     val navController = rememberNavController()
-                    val setupState by viewModel.state.collectAsState()
+                    val setupState by setupViewModel.state.collectAsState()
 
                     NavHost(navController = navController, startDestination = startScreen) {
-                        
                         // ROUTE 1: Setup
-                        composable("setup") {
+                        composable(
+                            route = "setup",
+                            enterTransition = { fadeIn(tween(300)) },
+                            exitTransition = { fadeOut(tween(200)) }
+                        ) {
                             SetupScreen(
                                 state = setupState,
-                                onStartSetup = { viewModel.startInstallation() },
-                                onRetry = { viewModel.retrySetup() },
+                                onStartSetup = { setupViewModel.startInstallation() },
+                                onRetry = { setupViewModel.retrySetup() },
                                 onTestRender = {
                                     navController.navigate("studio") {
                                         popUpTo("setup") { inclusive = true }
@@ -62,29 +80,46 @@ class MainActivity : ComponentActivity() {
                         }
 
                         // ROUTE 2: Main Studio
-                        composable("studio") {
+                        composable(
+                            route = "studio",
+                            enterTransition = { fadeIn(tween(300)) },
+                            exitTransition = { fadeOut(tween(200)) }
+                        ) {
                             StudioScreen(
-                                onNavigateToSettings = { navController.navigate("settings") },
-                                onNavigateToGallery = { navController.navigate("gallery") },
-                                onNavigateToTemplates = { navController.navigate("templates") }
+                                viewModel = studioViewModel,
+                                onNavigateToSettings = { navController.navigate("settings") }
                             )
                         }
 
-                        // ROUTE 3: Settings Screen
-                        composable("settings") {
-                            SettingsScreen(
-                                onBackClick = { navController.popBackStack() } 
-                            )
+                        // ROUTE 3: Settings
+                        composable(
+                            route = "settings",
+                            enterTransition = {
+                                slideIntoContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                    animationSpec = tween(350, easing = EaseOutCubic),
+                                )
+                            },
+                            exitTransition = {
+                                slideOutOfContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.End,
+                                    animationSpec = tween(300, easing = EaseInCubic),
+                                )
+                            },
+                        ) {
+                            SettingsScreen(onBack = { navController.popBackStack() })
                         }
 
-                        // ROUTE 4: Gallery Placeholder
-                        composable("gallery") {
-                            Box(modifier = Modifier.fillMaxSize().background(Color.Black))
+                        // ROUTE 4 & 5: Gallery & Templates placeholders
+                        composable("gallery") { 
+                            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                                GalleryScreen(onBackClick = { navController.popBackStack() })
+                            }
                         }
-
-                        // ROUTE 5: Templates Placeholder
-                        composable("templates") {
-                            Box(modifier = Modifier.fillMaxSize().background(Color.Black))
+                        composable("templates") { 
+                            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                                TemplatesScreen(onBackClick = { navController.popBackStack() })
+                            }
                         }
                     }
                 }
