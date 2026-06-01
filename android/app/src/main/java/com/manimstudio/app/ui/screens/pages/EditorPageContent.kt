@@ -1,29 +1,27 @@
 package com.manimstudio.app.ui.screens.pages
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.manimstudio.app.data.models.ChatMessage
+import com.manimstudio.app.data.models.StudioPhase
 import com.manimstudio.app.ui.components.SyntaxHighlightedEditor
-import com.manimstudio.app.ui.theme.*
-import com.manimstudio.app.viewmodel.StudioPhase
 
 @Composable
 fun EditorPageContent(
@@ -32,158 +30,160 @@ fun EditorPageContent(
     phase: StudioPhase,
     renderProgress: String,
     elapsedSeconds: Int,
-    messages: List<ChatMessage>,
+    messages: List<ChatMessage> = emptyList(),
+    modifier: Modifier = Modifier,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
+        // Code editor — full screen, starts from top
+        SyntaxHighlightedEditor(
+            code = code,
+            onCodeChanged = onCodeChanged,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 0.dp), // starts from very top
+        )
 
-        // Phase indicator bar below tab row
-        AnimatedContent(
-            targetState = phase,
-            transitionSpec = {
-                fadeIn(tween(300)) togetherWith fadeOut(tween(300))
-            },
-            label = "phase_bar"
-        ) { currentPhase ->
-            when (currentPhase) {
-                StudioPhase.GENERATING -> {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth().height(2.dp),
-                        color = Primary,
-                        trackColor = SurfaceVariant,
+        // Fade behind top bar (same as home page)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .align(Alignment.TopStart)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.8f),
+                            Color.Transparent,
+                        )
+                    )
+                )
+        )
+
+        // Rendering progress bar — slim, modern, under tab dots
+        AnimatedVisibility(
+            visible = phase == StudioPhase.RENDERING || phase == StudioPhase.GENERATING,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 90.dp),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // Animated shimmer progress bar
+                val transition = rememberInfiniteTransition(label = "shimmer")
+                val shimmerOffset by transition.animateFloat(
+                    initialValue = -1f, targetValue = 2f,
+                    animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing)),
+                    label = "shimmerOffset",
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .clip(RoundedCornerShape(1.dp))
+                        .background(MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        MaterialTheme.colorScheme.primary,
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+                                        Color.Transparent,
+                                    ),
+                                    startX = shimmerOffset * 1000f,
+                                    endX = (shimmerOffset + 0.5f) * 1000f,
+                                )
+                            )
                     )
                 }
-                StudioPhase.RENDERING -> {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth().height(2.dp),
-                        color = Primary,
-                        trackColor = SurfaceVariant,
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = if (phase == StudioPhase.GENERATING)
+                            "Generating" else "Rendering",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Text(
+                        text = "${elapsedSeconds}s",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                    if (renderProgress.isNotEmpty()) {
+                        Text(
+                            text = "· ${renderProgress.takeLast(40)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
-                else -> Spacer(modifier = Modifier.height(2.dp))
             }
         }
 
-        // Status row
-        AnimatedVisibility(
-            visible = phase == StudioPhase.GENERATING ||
-                      phase == StudioPhase.RENDERING,
+        // Console strip at bottom — stays visible
+        Surface(
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 160.dp), // above input bar
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(PrimaryContainer)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
-                        color = Primary,
-                        strokeWidth = 2.dp,
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = renderProgress.ifEmpty {
-                            if (phase == StudioPhase.GENERATING) "Generating code..."
-                            else "Rendering..."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = OnPrimaryContainer,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Text(
-                    text = "${elapsedSeconds}s",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = OnSurfaceVariant,
-                )
-            }
-        }
-
-        // Code editor area
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .background(Color(0xFF0D0D0D)),
-        ) {
-            if (code.isEmpty() && phase == StudioPhase.GENERATING) {
-                // Typing animation placeholder
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Primary)
-                }
-            } else {
-                SyntaxHighlightedEditor(
-                    code = code,
-                    onCodeChanged = onCodeChanged,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-
-            // Copy button top right
-            IconButton(
-                onClick = { /* copy to clipboard */ },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .size(36.dp)
-                    .background(SurfaceVariant, CircleShape),
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.ContentCopy,
-                    contentDescription = "Copy code",
-                    tint = OnSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        }
-
-        // Bottom console strip
-        Surface(
-            color = SurfaceDim,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Outlined.Terminal,
-                        contentDescription = null,
-                        tint = OnSurfaceDim,
-                        modifier = Modifier.size(14.dp),
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "CONSOLE",
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Outlined.Terminal, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(13.dp))
+                    Text("CONSOLE",
                         style = MaterialTheme.typography.labelSmall,
-                        color = OnSurfaceDim,
-                        letterSpacing = 1.sp,
-                    )
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        letterSpacing = 0.8.sp)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    // Status dot with pulse animation
+                    val pulseAnim = rememberInfiniteTransition(label = "pulse")
+                    val pulseAlpha by pulseAnim.animateFloat(
+                        initialValue = 1f, targetValue = 0.3f,
+                        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
+                        label = "pulseAlpha",
+                    )
                     Box(
                         modifier = Modifier
-                            .size(6.dp)
+                            .size(7.dp)
                             .background(
-                                color = when (phase) {
-                                    StudioPhase.RENDERING -> Primary
-                                    StudioPhase.DONE -> Success
-                                    StudioPhase.ERROR -> Error
-                                    else -> OnSurfaceDim
+                                color = when(phase) {
+                                    StudioPhase.RENDERING -> MaterialTheme.colorScheme.primary
+                                        .copy(alpha = if (phase == StudioPhase.RENDERING) pulseAlpha else 1f)
+                                    StudioPhase.DONE -> Color(0xFF4CAF50)
+                                    StudioPhase.ERROR -> MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
                                 },
                                 shape = CircleShape,
                             )
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = when (phase) {
+                        text = when(phase) {
                             StudioPhase.RENDERING -> "Rendering"
                             StudioPhase.GENERATING -> "Generating"
                             StudioPhase.DONE -> "Ready"
@@ -191,12 +191,10 @@ fun EditorPageContent(
                             else -> "Idle"
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = OnSurfaceDim,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(120.dp)) // space for input + chips
     }
 }

@@ -3,6 +3,7 @@ package com.manimstudio.app.ui.components
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -16,6 +17,7 @@ import com.manimstudio.app.ui.theme.GradientPurple
 @Composable
 fun PulseBackground(modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val bgColor = MaterialTheme.colorScheme.background
     
     val phase by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -34,7 +36,7 @@ fun PulseBackground(modifier: Modifier = Modifier) {
         val centerBlue = Offset(width * (0.2f + 0.6f * phase), height * (0.3f + 0.4f * phase))
         val centerPurple = Offset(width * (0.8f - 0.6f * phase), height * (0.7f - 0.4f * phase))
 
-        drawRect(color = Color.Black)
+        drawRect(color = bgColor)
         
         drawRect(
             brush = Brush.radialGradient(

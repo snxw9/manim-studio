@@ -30,10 +30,10 @@ fun SetupScreen(
     onTestRender: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    val backgroundColor = Color(0xFF0D0D0D)
-    val orangeAccent = Color(0xFFE65100)
-    val textPrimary = Color(0xFFECECEC)
-    val textMuted = Color(0xFF666666)
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val orangeAccent = MaterialTheme.colorScheme.primary
+    val textPrimary = MaterialTheme.colorScheme.onBackground
+    val textMuted = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = Modifier
@@ -152,7 +152,7 @@ private fun NeedsSetupContent(
             Text(
                 text = "Set Up Manim Studio",
                 fontSize = 16.sp,
-                color = Color(0xFF0D0D0D),
+                color = MaterialTheme.colorScheme.onPrimary,
                 fontFamily = FontFamily.Monospace,
             )
         }
@@ -172,7 +172,7 @@ private fun SetupInfoCard(accent: Color, textMuted: Color) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF1A1A1A))
+            .background(MaterialTheme.colorScheme.surface)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -213,7 +213,7 @@ private fun InstallingContent(
             progress = { state.progress / 100f },
             modifier = Modifier.fillMaxWidth().height(4.dp),
             color = orangeAccent,
-            trackColor = Color(0xFF2A2A2A),
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
         )
 
         Row(
@@ -266,7 +266,7 @@ private fun ReadyContent(
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(8.dp),
         ) {
-            Text("Run Test Render", color = Color(0xFF0D0D0D),
+            Text("Run Test Render", color = MaterialTheme.colorScheme.onPrimary,
                 fontFamily = FontFamily.Monospace)
         }
     }
@@ -285,7 +285,7 @@ private fun ErrorContent(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Text(text = "Setup failed", fontSize = 18.sp, color = Color(0xFFEF4444))
+        Text(text = "Setup failed", fontSize = 18.sp, color = MaterialTheme.colorScheme.error)
         Text(
             text = "Check your internet connection and try again.",
             fontSize = 14.sp,
@@ -299,14 +299,14 @@ private fun ErrorContent(
                     .fillMaxWidth()
                     .weight(1f)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(Color(0xFF1A1A1A))
+                    .background(MaterialTheme.colorScheme.surface)
                     .padding(12.dp)
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(
                     text = error,
                     fontSize = 12.sp,
-                    color = Color(0xFF666666),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     fontFamily = FontFamily.Monospace
                 )
             }
@@ -318,7 +318,7 @@ private fun ErrorContent(
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(8.dp),
         ) {
-            Text("Try Again", color = Color(0xFF0D0D0D), fontFamily = FontFamily.Monospace)
+            Text("Try Again", color = MaterialTheme.colorScheme.onPrimary, fontFamily = FontFamily.Monospace)
         }
     }
 }

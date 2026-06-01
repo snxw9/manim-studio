@@ -1,5 +1,6 @@
 package com.manimstudio.app.ui.screens
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,28 +12,44 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.manimstudio.app.ui.theme.*
+import com.manimstudio.app.data.models.RenderQuality
+import com.manimstudio.app.viewmodel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(
+    settingsViewModel: SettingsViewModel,
+    onBack: () -> Unit,
+    onNavigateToTheme: () -> Unit,
+) {
+    val settings by settingsViewModel.settings.collectAsState()
+
+    var showQualityDialog by remember { mutableStateOf(false) }
+    var showProviderDialog by remember { mutableStateOf(false) }
+    var showGroqDialog by remember { mutableStateOf(false) }
+    var showGeminiDialog by remember { mutableStateOf(false) }
+    var showNameDialog by remember { mutableStateOf(false) }
+    var showReinstallDialog by remember { mutableStateOf(false) }
+    var showSaveLocationDialog by remember { mutableStateOf(false) }
+
     Scaffold(
-        containerColor = Background,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         text = "Settings",
                         style = MaterialTheme.typography.headlineMedium,
-                        color = OnBackground,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontWeight = FontWeight.Normal,
                     )
                 },
@@ -41,13 +58,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                             contentDescription = "Back",
-                            tint = OnBackground,
+                            tint = MaterialTheme.colorScheme.onBackground,
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Background,
-                    scrolledContainerColor = Background,
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
                 ),
             )
         },
@@ -64,28 +81,24 @@ fun SettingsScreen(onBack: () -> Unit) {
                 SettingsGroup {
                     ListItem(
                         headlineContent = {
-                            Text("Abdulfatai", style = MaterialTheme.typography.bodyLarge,
-                                color = OnBackground)
-                        },
-                        supportingContent = {
-                            Text("Manim Studio PRO", style = MaterialTheme.typography.bodySmall,
-                                color = Primary)
+                            Text(settings.userName.ifBlank { "User" }, style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onBackground)
                         },
                         leadingContent = {
                             Box(
-                                modifier = Modifier.size(40.dp).background(Primary, CircleShape),
+                                modifier = Modifier.size(40.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text("A", color = OnPrimary,
+                                Text(settings.userName.firstOrNull()?.toString()?.uppercase() ?: "U", color = MaterialTheme.colorScheme.onPrimary,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold)
                             }
                         },
                         trailingContent = {
                             Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                                null, tint = OnSurfaceDim)
+                                null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                         },
-                        modifier = Modifier.clickable { },
+                        modifier = Modifier.clickable { showNameDialog = true },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
@@ -95,17 +108,17 @@ fun SettingsScreen(onBack: () -> Unit) {
             item {
                 SettingsGroup {
                     ListItem(
-                        headlineContent = { Text("Theme", color = OnBackground) },
+                        headlineContent = { Text("Theme", color = MaterialTheme.colorScheme.onBackground) },
                         trailingContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("System", color = OnSurfaceVariant,
+                                Text(settings.themeSettings.themeMode.name.lowercase().replaceFirstChar { it.uppercase() }, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.bodyMedium)
                                 Spacer(Modifier.width(4.dp))
                                 Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                                    null, tint = OnSurfaceDim)
+                                    null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                             }
                         },
-                        modifier = Modifier.clickable { },
+                        modifier = Modifier.clickable { onNavigateToTheme() },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
@@ -115,55 +128,55 @@ fun SettingsScreen(onBack: () -> Unit) {
             item {
                 SettingsGroup {
                     ListItem(
-                        headlineContent = { Text("Default Provider", color = OnBackground) },
+                        headlineContent = { Text("Default Provider", color = MaterialTheme.colorScheme.onBackground) },
                         trailingContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Auto", color = OnSurfaceVariant,
+                                Text(settings.apiProvider.replaceFirstChar { it.uppercase() }, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.bodyMedium)
                                 Spacer(Modifier.width(4.dp))
                                 Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                                    null, tint = OnSurfaceDim)
+                                    null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                             }
                         },
-                        modifier = Modifier.clickable { },
+                        modifier = Modifier.clickable { showProviderDialog = true },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
-                    HorizontalDivider(color = OutlineVariant,
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant,
                         modifier = Modifier.padding(horizontal = 16.dp))
                     ListItem(
-                        headlineContent = { Text("Groq API Key", color = OnBackground) },
-                        supportingContent = { Text("Free tier · No billing required",
-                            color = OnSurfaceVariant,
+                        headlineContent = { Text("Groq API Key", color = MaterialTheme.colorScheme.onBackground) },
+                        supportingContent = { Text("Get a free key at console.groq.com",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall) },
                         trailingContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("••••••••", color = OnSurfaceDim,
+                                Text(if (settings.groqApiKey.isEmpty()) "Not set" else "••••••••", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                     style = MaterialTheme.typography.bodyMedium)
                                 Spacer(Modifier.width(4.dp))
-                                Icon(Icons.Outlined.Edit, null,
-                                    tint = OnSurfaceDim, modifier = Modifier.size(18.dp))
+                                Icon(if (settings.groqApiKey.isEmpty()) Icons.Outlined.Add else Icons.Outlined.Edit, null,
+                                    tint = if (settings.groqApiKey.isEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
                             }
                         },
-                        modifier = Modifier.clickable { },
+                        modifier = Modifier.clickable { showGroqDialog = true },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
-                    HorizontalDivider(color = OutlineVariant,
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant,
                         modifier = Modifier.padding(horizontal = 16.dp))
                     ListItem(
-                        headlineContent = { Text("Gemini API Key", color = OnBackground) },
-                        supportingContent = { Text("Free tier available",
-                            color = OnSurfaceVariant,
+                        headlineContent = { Text("Gemini API Key", color = MaterialTheme.colorScheme.onBackground) },
+                        supportingContent = { Text("Get your key from Google AI Studio",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall) },
                         trailingContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Not set", color = OnSurfaceDim,
+                                Text(if (settings.geminiApiKey.isEmpty()) "Not set" else "••••••••", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                     style = MaterialTheme.typography.bodyMedium)
                                 Spacer(Modifier.width(4.dp))
-                                Icon(Icons.Outlined.Add, null,
-                                    tint = Primary, modifier = Modifier.size(18.dp))
+                                Icon(if (settings.geminiApiKey.isEmpty()) Icons.Outlined.Add else Icons.Outlined.Edit, null,
+                                    tint = if (settings.geminiApiKey.isEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
                             }
                         },
-                        modifier = Modifier.clickable { },
+                        modifier = Modifier.clickable { showGeminiDialog = true },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
@@ -173,31 +186,31 @@ fun SettingsScreen(onBack: () -> Unit) {
             item {
                 SettingsGroup {
                     ListItem(
-                        headlineContent = { Text("Default Quality", color = OnBackground) },
+                        headlineContent = { Text("Default Quality", color = MaterialTheme.colorScheme.onBackground) },
                         trailingContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("720p", color = OnSurfaceVariant)
+                                Text(settings.renderQuality.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(Modifier.width(4.dp))
                                 Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                                    null, tint = OnSurfaceDim)
+                                    null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                             }
                         },
-                        modifier = Modifier.clickable { },
+                        modifier = Modifier.clickable { showQualityDialog = true },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
-                    HorizontalDivider(color = OutlineVariant,
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant,
                         modifier = Modifier.padding(horizontal = 16.dp))
                     ListItem(
-                        headlineContent = { Text("Save Location", color = OnBackground) },
+                        headlineContent = { Text("Save Location", color = MaterialTheme.colorScheme.onBackground) },
                         trailingContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Internal", color = OnSurfaceVariant)
+                                Text("Internal", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(Modifier.width(4.dp))
                                 Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                                    null, tint = OnSurfaceDim)
+                                    null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                             }
                         },
-                        modifier = Modifier.clickable { },
+                        modifier = Modifier.clickable { showSaveLocationDialog = true },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
@@ -207,61 +220,327 @@ fun SettingsScreen(onBack: () -> Unit) {
             item {
                 SettingsGroup {
                     ListItem(
-                        headlineContent = { Text("Engine Status", color = OnBackground) },
+                        headlineContent = { Text("Engine Status", color = MaterialTheme.colorScheme.onBackground) },
                         trailingContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(modifier = Modifier.size(8.dp)
-                                    .background(Success, CircleShape))
+                                    .background(Color(0xFF4CAF50), CircleShape))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Ready", color = Success,
+                                Text("Ready", color = Color(0xFF4CAF50),
                                     style = MaterialTheme.typography.bodyMedium)
                             }
                         },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
-                    HorizontalDivider(color = OutlineVariant,
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant,
                         modifier = Modifier.padding(horizontal = 16.dp))
                     ListItem(
                         headlineContent = {
-                            Text("Reinstall Engine", color = Error,
+                            Text("Reinstall Engine", color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.bodyLarge)
                         },
                         supportingContent = {
                             Text("Re-downloads and reinstalls Alpine Linux + Manim",
-                                color = OnSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall)
                         },
-                        modifier = Modifier.clickable { },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    )
-                }
-            }
-
-            item { SettingsSectionHeader("About") }
-            item {
-                SettingsGroup {
-                    ListItem(
-                        headlineContent = { Text("Version", color = OnBackground) },
-                        trailingContent = {
-                            Text("1.0.0-alpha", color = OnSurfaceDim,
-                                style = MaterialTheme.typography.bodyMedium)
-                        },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    )
-                    HorizontalDivider(color = OutlineVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp))
-                    ListItem(
-                        headlineContent = { Text("GitHub", color = OnBackground) },
-                        trailingContent = {
-                            Icon(Icons.Outlined.OpenInNew, null,
-                                tint = OnSurfaceDim, modifier = Modifier.size(18.dp))
-                        },
-                        modifier = Modifier.clickable { /* open github */ },
+                        modifier = Modifier.clickable { showReinstallDialog = true },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
             }
         }
+    }
+
+    // Dialogs
+    if (showQualityDialog) {
+        AlertDialog(
+            onDismissRequest = { showQualityDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Default Quality", color = MaterialTheme.colorScheme.onBackground) },
+            text = {
+                Column {
+                    listOf(
+                        RenderQuality.LOW to "480p (Fast)",
+                        RenderQuality.MID to "720p (Balanced)",
+                        RenderQuality.HIGH to "1080p (High quality)",
+                    ).forEach { (quality, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    settingsViewModel.updateQuality(quality)
+                                    showQualityDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = settings.renderQuality == quality,
+                                onClick = {
+                                    settingsViewModel.updateQuality(quality)
+                                    showQualityDialog = false
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = MaterialTheme.colorScheme.primary
+                                ),
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(label, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+        )
+    }
+
+    if (showProviderDialog) {
+        AlertDialog(
+            onDismissRequest = { showProviderDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Default Provider", color = MaterialTheme.colorScheme.onBackground) },
+            text = {
+                Column {
+                    listOf("auto", "groq", "gemini", "openai").forEach { provider ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    settingsViewModel.updateProvider(provider)
+                                    showProviderDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = settings.apiProvider == provider,
+                                onClick = {
+                                    settingsViewModel.updateProvider(provider)
+                                    showProviderDialog = false
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = MaterialTheme.colorScheme.primary
+                                ),
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(provider.replaceFirstChar { it.uppercase() }, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+        )
+    }
+
+    if (showGroqDialog) {
+        var keyInput by remember { mutableStateOf(settings.groqApiKey) }
+        AlertDialog(
+            onDismissRequest = { showGroqDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Groq API Key", color = MaterialTheme.colorScheme.onBackground) },
+            text = {
+                Column {
+                    Text(
+                        "Get a free key at console.groq.com",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    )
+                    OutlinedTextField(
+                        value = keyInput,
+                        onValueChange = { keyInput = it },
+                        label = { Text("API Key") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            cursorColor = MaterialTheme.colorScheme.primary,
+                        ),
+                        trailingIcon = {
+                            IconButton(onClick = { /* toggle visibility */ }) {
+                                Icon(Icons.Outlined.Visibility, null)
+                            }
+                        },
+                    )
+                    if (keyInput.isNotEmpty()) {
+                        Text(
+                            "Key will be stored securely on your device",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    settingsViewModel.updateGroqKey(keyInput)
+                    showGroqDialog = false
+                }) {
+                    Text("Save", color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGroqDialog = false }) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+        )
+    }
+
+    if (showGeminiDialog) {
+        var keyInput by remember { mutableStateOf(settings.geminiApiKey) }
+        AlertDialog(
+            onDismissRequest = { showGeminiDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Gemini API Key", color = MaterialTheme.colorScheme.onBackground) },
+            text = {
+                Column {
+                    Text(
+                        "Get your API key from Google AI Studio",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    )
+                    OutlinedTextField(
+                        value = keyInput,
+                        onValueChange = { keyInput = it },
+                        label = { Text("API Key") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            cursorColor = MaterialTheme.colorScheme.primary,
+                        ),
+                        trailingIcon = {
+                            IconButton(onClick = { /* toggle visibility */ }) {
+                                Icon(Icons.Outlined.Visibility, null)
+                            }
+                        },
+                    )
+                    if (keyInput.isNotEmpty()) {
+                        Text(
+                            "Key will be stored securely on your device",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    settingsViewModel.updateGeminiKey(keyInput)
+                    showGeminiDialog = false
+                }) {
+                    Text("Save", color = MaterialTheme.colorScheme.primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGeminiDialog = false }) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+        )
+    }
+
+    if (showNameDialog) {
+        var nameInput by remember { mutableStateOf(settings.userName) }
+        AlertDialog(
+            onDismissRequest = { showNameDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Your name", color = MaterialTheme.colorScheme.onBackground) },
+            text = {
+                OutlinedTextField(
+                    value = nameInput,
+                    onValueChange = { nameInput = it },
+                    label = { Text("Name or nickname") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    settingsViewModel.updateUserName(nameInput)
+                    showNameDialog = false
+                }) { Text("Save", color = MaterialTheme.colorScheme.primary) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNameDialog = false }) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        )
+    }
+
+    if (showReinstallDialog) {
+        AlertDialog(
+            onDismissRequest = { showReinstallDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Reinstall Engine?", color = MaterialTheme.colorScheme.error) },
+            text = {
+                Text(
+                    "This will delete the Alpine Linux environment and " +
+                    "re-download everything (~300MB). This takes 5-10 minutes.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { 
+                    // Trigger reinstall logic
+                    showReinstallDialog = false
+                }) {
+                    Text("Reinstall", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReinstallDialog = false }) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+        )
+    }
+
+    if (showSaveLocationDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveLocationDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Save Location", color = MaterialTheme.colorScheme.onBackground) },
+            text = {
+                Column {
+                    listOf("Internal", "External Movies folder").forEach { location ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showSaveLocationDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = (location == "Internal"),
+                                onClick = {
+                                    showSaveLocationDialog = false
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = MaterialTheme.colorScheme.primary
+                                ),
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(location, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+        )
     }
 }
 
@@ -270,7 +549,7 @@ fun SettingsSectionHeader(title: String) {
     Text(
         text = title,
         style = MaterialTheme.typography.labelMedium,
-        color = Primary,
+        color = MaterialTheme.colorScheme.primary,
         letterSpacing = 0.5.sp,
         modifier = Modifier.padding(start = 28.dp, top = 24.dp, bottom = 8.dp),
     )
@@ -283,7 +562,7 @@ fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(Surface),
+            .background(MaterialTheme.colorScheme.surface),
         content = content,
     )
 }

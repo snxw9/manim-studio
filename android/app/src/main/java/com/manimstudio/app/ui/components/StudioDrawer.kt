@@ -33,7 +33,7 @@ fun StudioDrawer(
     onClose: () -> Unit,
 ) {
     ModalDrawerSheet(
-        drawerContainerColor = Color(0xFF0A0A0A),
+        drawerContainerColor = MaterialTheme.colorScheme.background,
         modifier = Modifier.width(300.dp),
     ) {
         // Header
@@ -48,14 +48,14 @@ fun StudioDrawer(
             Text(
                 text = "Manim Studio",
                 style = MaterialTheme.typography.titleLarge,
-                color = OnBackground,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.SemiBold,
             )
             IconButton(onClick = onClose) {
                 Icon(
                     imageVector = Icons.Outlined.EditNote,
                     contentDescription = "New",
-                    tint = OnSurfaceVariant,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -70,9 +70,9 @@ fun StudioDrawer(
             onClick = onNewChat,
             shape = RoundedCornerShape(percent = 50),
             colors = NavigationDrawerItemDefaults.colors(
-                unselectedContainerColor = SurfaceBright,
-                unselectedIconColor = OnBackground,
-                unselectedTextColor = OnBackground,
+                unselectedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                unselectedIconColor = MaterialTheme.colorScheme.onBackground,
+                unselectedTextColor = MaterialTheme.colorScheme.onBackground,
             ),
             modifier = Modifier.padding(horizontal = 12.dp),
         )
@@ -86,8 +86,8 @@ fun StudioDrawer(
             onClick = { /* search */ },
             colors = NavigationDrawerItemDefaults.colors(
                 unselectedContainerColor = Color.Transparent,
-                unselectedIconColor = OnSurfaceVariant,
-                unselectedTextColor = OnBackground,
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unselectedTextColor = MaterialTheme.colorScheme.onBackground,
             ),
             modifier = Modifier.padding(horizontal = 12.dp),
         )
@@ -99,8 +99,8 @@ fun StudioDrawer(
             onClick = onGalleryClick,
             colors = NavigationDrawerItemDefaults.colors(
                 unselectedContainerColor = Color.Transparent,
-                unselectedIconColor = OnSurfaceVariant,
-                unselectedTextColor = OnBackground,
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unselectedTextColor = MaterialTheme.colorScheme.onBackground,
             ),
             modifier = Modifier.padding(horizontal = 12.dp),
         )
@@ -112,8 +112,8 @@ fun StudioDrawer(
             onClick = onTemplatesClick,
             colors = NavigationDrawerItemDefaults.colors(
                 unselectedContainerColor = Color.Transparent,
-                unselectedIconColor = OnSurfaceVariant,
-                unselectedTextColor = OnBackground,
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unselectedTextColor = MaterialTheme.colorScheme.onBackground,
             ),
             modifier = Modifier.padding(horizontal = 12.dp),
         )
@@ -124,7 +124,7 @@ fun StudioDrawer(
             Text(
                 text = "Recent",
                 style = MaterialTheme.typography.labelMedium,
-                color = OnSurfaceDim,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.padding(horizontal = 28.dp, vertical = 8.dp),
                 letterSpacing = 0.5.sp,
             )
@@ -146,7 +146,7 @@ fun StudioDrawer(
                         onClick = { onSelectChat(chat) },
                         colors = NavigationDrawerItemDefaults.colors(
                             unselectedContainerColor = Color.Transparent,
-                            unselectedTextColor = OnSurface,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurface,
                         ),
                         modifier = Modifier.padding(horizontal = 12.dp),
                     )
@@ -157,7 +157,7 @@ fun StudioDrawer(
         }
 
         // Bottom — user profile + settings
-        HorizontalDivider(color = OutlineVariant, modifier = Modifier.padding(horizontal = 16.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(horizontal = 16.dp))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -169,13 +169,13 @@ fun StudioDrawer(
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .background(Primary, CircleShape),
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = "A",
                     style = MaterialTheme.typography.titleMedium,
-                    color = OnPrimary,
+                    color = MaterialTheme.colorScheme.onPrimary,
                     fontWeight = FontWeight.Bold,
                 )
             }
@@ -184,21 +184,15 @@ fun StudioDrawer(
                 Text(
                     text = "Abdulfatai",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = OnBackground,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    text = "PRO",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Primary,
-                    letterSpacing = 1.sp,
                 )
             }
             IconButton(onClick = onNavigateToSettings) {
                 Icon(
                     imageVector = Icons.Outlined.Settings,
                     contentDescription = "Settings",
-                    tint = OnSurfaceVariant,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp),
                 )
             }

@@ -9,9 +9,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.manimstudio.app.data.models.RenderQuality
-import com.manimstudio.app.ui.theme.AccentOrange
-import com.manimstudio.app.ui.theme.Surface
-import com.manimstudio.app.ui.theme.White
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -22,8 +19,8 @@ fun EngineSettingsSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Surface,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = Color.Gray) }
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = { BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) }
     ) {
         Column(
             modifier = Modifier
@@ -33,13 +30,13 @@ fun EngineSettingsSheet(
         ) {
             Text(
                 "Engine Settings",
-                color = White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(vertical = 16.dp)
             )
 
-            Text("Rendering Quality", color = White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text("Rendering Quality", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(12.dp))
             
             RenderQuality.entries.forEach { quality ->
@@ -50,19 +47,19 @@ fun EngineSettingsSheet(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
-                        Text(quality.label, color = White, fontSize = 16.sp)
-                        Text(quality.estimatedSeconds, color = Color.Gray, fontSize = 12.sp)
+                        Text(quality.label, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
+                        Text(quality.estimatedSeconds, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     }
                     RadioButton(
                         selected = quality == currentQuality,
                         onClick = { onQualitySelected(quality) },
-                        colors = RadioButtonDefaults.colors(selectedColor = AccentOrange)
+                        colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary)
                     )
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
-            Text("AI Intelligence", color = White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.height(24.dp))
+            Text("AI Intelligence", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(12.dp))
             
             // Mocking API providers for now
@@ -71,11 +68,11 @@ fun EngineSettingsSheet(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(provider, color = if (index == 0) White else Color.Gray, fontSize = 16.sp)
+                    Text(provider, color = if (index == 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
                     if (index == 0) {
-                        RadioButton(selected = true, onClick = {}, colors = RadioButtonDefaults.colors(selectedColor = AccentOrange))
+                        RadioButton(selected = true, onClick = {}, colors = RadioButtonDefaults.colors(selectedColor = MaterialTheme.colorScheme.primary))
                     } else {
-                        RadioButton(selected = false, onClick = {}, colors = RadioButtonDefaults.colors(unselectedColor = Color.Gray))
+                        RadioButton(selected = false, onClick = {}, colors = RadioButtonDefaults.colors(unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant))
                     }
                 }
             }

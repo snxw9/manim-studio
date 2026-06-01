@@ -75,6 +75,9 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("androidx.media3:media3-common:1.4.1")
     
+    // Google Fonts
+    implementation("androidx.compose.ui:ui-text-google-fonts:1.7.4")
+    
     // Coil (video thumbnails)
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-video:2.7.0")

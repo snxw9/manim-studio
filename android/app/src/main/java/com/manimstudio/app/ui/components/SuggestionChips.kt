@@ -58,7 +58,7 @@ fun SuggestionChips(
             Icon(
                 Icons.Outlined.AutoAwesome,
                 contentDescription = null,
-                tint = Color(0xFFFF8C00),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(14.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))

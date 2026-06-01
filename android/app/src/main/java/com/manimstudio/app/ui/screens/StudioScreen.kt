@@ -11,8 +11,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.manimstudio.app.data.models.StudioPhase
 import com.manimstudio.app.ui.components.*
@@ -21,9 +24,9 @@ import com.manimstudio.app.ui.components.animations.RenderingGradientBackground
 import com.manimstudio.app.ui.screens.pages.EditorPageContent
 import com.manimstudio.app.ui.screens.pages.HomePageContent
 import com.manimstudio.app.ui.screens.pages.VideoPageContent
-import com.manimstudio.app.ui.theme.Background
 import com.manimstudio.app.viewmodel.StudioViewModel
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -35,6 +38,9 @@ fun StudioScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(pageCount = { 3 })
+    
+    val isRendering = uiState.phase == StudioPhase.RENDERING ||
+                      uiState.phase == StudioPhase.GENERATING
 
     // Auto-switch to editor when generating starts
     LaunchedEffect(uiState.phase) {
@@ -64,46 +70,41 @@ fun StudioScreen(
         },
         scrimColor = Color.Black.copy(alpha = 0.6f),
     ) {
-        Box(modifier = Modifier.fillMaxSize().background(Background)) {
-
-            // Ambient orange glow at bottom — always present, subtle
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        ) {
+            // ── LAYER 1: full-screen gradient (behind everything) ──
             AmbientGlow(modifier = Modifier.align(Alignment.BottomCenter))
-
-            // Pulsing mesh gradient during rendering
             AnimatedVisibility(
-                visible = uiState.phase == StudioPhase.RENDERING ||
-                          uiState.phase == StudioPhase.GENERATING,
+                visible = isRendering,
                 enter = fadeIn(tween(800)),
                 exit = fadeOut(tween(600)),
             ) {
                 RenderingGradientBackground()
             }
 
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Top bar
-                StudioTopBar(
-                    currentEngine = uiState.selectedEngine,
-                    onMenuClick = { scope.launch { drawerState.open() } },
-                    onEngineClick = { viewModel.toggleEngineSelector() },
-                    onNewChatClick = { viewModel.onNewChat() },
-                )
+            // ── LAYER 2: HorizontalPager (full screen including under status bar) ──
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                beyondViewportPageCount = 1,
+            ) { page ->
+                val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+                val absOffset = abs(pageOffset).coerceIn(0f, 1f)
+                val scale = 0.92f + (1f - 0.92f) * (1f - absOffset)
+                val alpha = 0.5f + (1f - 0.5f) * (1f - absOffset)
 
-                // Tab indicator — only visible when not on home page
-                AnimatedVisibility(
-                    visible = pagerState.currentPage > 0 ||
-                              pagerState.currentPageOffsetFraction != 0f,
-                    enter = fadeIn() + slideInVertically(),
-                    exit = fadeOut() + slideOutVertically(),
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            this.alpha = alpha
+                        }
                 ) {
-                    PagerTabRow(pagerState = pagerState, phase = uiState.phase)
-                }
-
-                // Main content — swipeable pages
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.weight(1f),
-                    beyondViewportPageCount = 1,
-                ) { page ->
                     when (page) {
                         0 -> HomePageContent(
                             userName = uiState.userName,
@@ -113,6 +114,7 @@ fun StudioScreen(
                                 viewModel.onSendPrompt()
                             },
                             messages = uiState.messages,
+                            modifier = Modifier.fillMaxSize(),
                         )
                         1 -> EditorPageContent(
                             code = uiState.generatedCode,
@@ -121,66 +123,116 @@ fun StudioScreen(
                             renderProgress = uiState.renderProgress,
                             elapsedSeconds = uiState.elapsedSeconds,
                             messages = uiState.messages,
+                            modifier = Modifier.fillMaxSize(),
                         )
                         2 -> VideoPageContent(
                             videoFile = uiState.lastVideoFile,
                             onExport = viewModel::onExportVideo,
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
                 }
             }
 
-            // Engine selector dropdown overlay
-            AnimatedVisibility(
-                visible = uiState.showEngineSelector,
-                enter = fadeIn() + scaleIn(initialScale = 0.9f,
-                    transformOrigin = TransformOrigin(0.5f, 0f)),
-                exit = fadeOut() + scaleOut(targetScale = 0.9f,
-                    transformOrigin = TransformOrigin(0.5f, 0f)),
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 56.dp)
+            // ── LAYER 3: Top bar OVERLAYS content with fade gradient behind it ──
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopStart),
             ) {
-                EngineSelectorDropdown(
-                    selected = uiState.selectedEngine,
-                    onSelect = { viewModel.onEngineSelected(it) },
-                    onDismiss = { viewModel.toggleEngineSelector() },
+                // Fade gradient so content behind top bar is legible
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.background,
+                                    MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
+                                    Color.Transparent,
+                                )
+                            )
+                        )
+                )
+                StudioTopBar(
+                    onMenuClick = { scope.launch { drawerState.open() } },
+                    onNewChatClick = { viewModel.onNewChat() },
+                    modifier = Modifier.statusBarsPadding(),
                 )
             }
 
-            // Floating input bar at bottom
+            // ── LAYER 4: Page tab dots (below top bar) ──
+            AnimatedVisibility(
+                visible = pagerState.currentPage > 0 || pagerState.currentPageOffsetFraction != 0f,
+                enter = fadeIn(), 
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 80.dp),
+            ) {
+                PagerTabRow(pagerState = pagerState, phase = uiState.phase)
+            }
+
+            // ── LAYER 5: Bottom input + chips (always on top) ──
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .padding(bottom = 16.dp)
+                    .padding(bottom = 12.dp)
                     .navigationBarsPadding(),
             ) {
-                // Render setting chips — float above input when on editor page
                 AnimatedVisibility(
-                    visible = pagerState.currentPage == 1 &&
-                              uiState.phase == StudioPhase.IDLE,
-                    enter = fadeIn() + slideInVertically { it / 2 },
-                    exit = fadeOut() + slideOutVertically { it / 2 },
+                    visible = pagerState.currentPage == 1 && uiState.phase == StudioPhase.IDLE,
+                    enter = fadeIn() + slideInVertically { it },
+                    exit = fadeOut() + slideOutVertically { it },
                 ) {
-                    RenderSettingChips(
+                    CompactRenderChips(
                         quality = uiState.renderQuality,
                         format = uiState.renderFormat,
                         onQualityChange = viewModel::onQualityChanged,
                         onFormatChange = viewModel::onFormatChanged,
                         onRender = viewModel::onRenderFromEditor,
-                        estimatedTime = uiState.renderQuality.estimatedSeconds,
-                        modifier = Modifier.padding(bottom = 8.dp),
+                        modifier = Modifier.padding(bottom = 6.dp),
                     )
                 }
-
+                
                 FloatingPromptInput(
                     text = uiState.inputText,
                     onTextChange = viewModel::onInputChanged,
                     onSend = viewModel::onSendPrompt,
                     onStop = viewModel::onStopRender,
                     onTemplateClick = { viewModel.showTemplates() },
-                    isRendering = uiState.phase == StudioPhase.RENDERING ||
-                                  uiState.phase == StudioPhase.GENERATING,
-                    currentPage = pagerState.currentPage,
+                    isRendering = isRendering,
+                    selectedEngine = uiState.selectedEngine,
+                    onEngineClick = { viewModel.toggleEngineSelector() },
+                )
+            }
+
+            // ── LAYER 6: Engine dropdown (above input, below status bar) ──
+            AnimatedVisibility(
+                visible = uiState.showEngineSelector,
+                enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom) +
+                        scaleIn(
+                            initialScale = 0.95f,
+                            transformOrigin = TransformOrigin(0.2f, 1f)
+                        ),
+                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom) +
+                       scaleOut(
+                           targetScale = 0.95f,
+                           transformOrigin = TransformOrigin(0.2f, 1f)
+                       ),
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 16.dp, bottom = 130.dp) // above input bar
+                    .widthIn(max = 300.dp)
+                    .zIndex(10f),
+            ) {
+                EngineSelectorDropdown(
+                    selected = uiState.selectedEngine,
+                    onSelect = viewModel::onEngineSelected,
+                    onDismiss = viewModel::toggleEngineSelector,
                 )
             }
         }

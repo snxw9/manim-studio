@@ -8,20 +8,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.manimstudio.app.data.models.SuggestionCard
-import com.manimstudio.app.ui.theme.OnBackground
-import com.manimstudio.app.ui.theme.OnSurfaceVariant
-import com.manimstudio.app.ui.theme.SurfaceBright
 
 @Composable
 fun SuggestionChip(
     suggestion: SuggestionCard,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceBright),
-        modifier = Modifier
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = modifier
             .width(180.dp)
             .height(96.dp),
     ) {
@@ -32,13 +30,13 @@ fun SuggestionChip(
             Text(
                 text = suggestion.title,
                 style = MaterialTheme.typography.titleSmall,
-                color = OnBackground,
+                color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 2,
             )
             Text(
                 text = suggestion.description,
                 style = MaterialTheme.typography.bodySmall,
-                color = OnSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )

@@ -26,7 +26,7 @@ data class SetupState(
 
 class SetupViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val engine = ProotEngine(app)
+    val engine = ProotEngine(app)
     private val renderer = ManimRenderer(app, engine)
 
     private val _state = MutableStateFlow(SetupState())

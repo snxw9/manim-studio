@@ -52,7 +52,7 @@ fun EngineSelectorDropdown(
                 .align(Alignment.TopCenter)
                 .clickable(enabled = false) { },
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
         ) {
             Column(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -63,7 +63,7 @@ fun EngineSelectorDropdown(
                             Text(
                                 text = engine.name,
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = if (isSelected) Primary else OnBackground,
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
                                 fontWeight = if (isSelected) FontWeight.Medium
                                              else FontWeight.Normal,
                             )
@@ -72,16 +72,16 @@ fun EngineSelectorDropdown(
                             Text(
                                 text = engine.description,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = OnSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         },
                         leadingContent = {
                             if (isSelected) {
                                 Icon(Icons.Outlined.Check, null,
-                                    tint = Primary, modifier = Modifier.size(20.dp))
+                                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                             } else {
                                 Icon(engine.icon, null,
-                                    tint = OnSurfaceDim, modifier = Modifier.size(20.dp))
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                             }
                         },
                         modifier = Modifier.clickable {
@@ -89,7 +89,7 @@ fun EngineSelectorDropdown(
                             onDismiss()
                         },
                         colors = ListItemDefaults.colors(
-                            containerColor = if (isSelected) PrimaryContainer
+                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
                                             else Color.Transparent
                         ),
                     )

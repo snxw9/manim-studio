@@ -1,124 +1,110 @@
 package com.manimstudio.app.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.manimstudio.app.data.models.RenderQuality
-import com.manimstudio.app.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RenderSettingChips(
+fun CompactRenderChips(
     quality: RenderQuality,
     format: String,
     onQualityChange: (RenderQuality) -> Unit,
     onFormatChange: (String) -> Unit,
     onRender: () -> Unit,
-    estimatedTime: String,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // Quality chips row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Quality",
-                style = MaterialTheme.typography.labelMedium,
-                color = OnSurfaceVariant,
-                modifier = Modifier.width(52.dp),
-            )
-            RenderQuality.entries.forEach { q ->
-                FilterChip(
-                    selected = quality == q,
-                    onClick = { onQualityChange(q) },
-                    label = { Text(q.label) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = PrimaryContainer,
-                        selectedLabelColor = OnPrimaryContainer,
-                        containerColor = SurfaceBright,
-                        labelColor = OnSurfaceVariant,
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            // Single row: quality chips + format chips + render button
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                // Quality
+                RenderQuality.entries.forEach { q ->
+                    SmallChip(
+                        label = q.label,
                         selected = quality == q,
-                        selectedBorderColor = Primary,
-                        borderColor = Outline,
-                    ),
+                        onClick = { onQualityChange(q) },
+                    )
+                }
+                Spacer(Modifier.width(2.dp))
+                // Divider
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(18.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant)
                 )
-            }
-        }
-
-        // Format chips row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Format",
-                style = MaterialTheme.typography.labelMedium,
-                color = OnSurfaceVariant,
-                modifier = Modifier.width(52.dp),
-            )
-            listOf("MP4", "GIF").forEach { fmt ->
-                FilterChip(
-                    selected = format == fmt,
-                    onClick = { onFormatChange(fmt) },
-                    label = { Text(fmt) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = PrimaryContainer,
-                        selectedLabelColor = OnPrimaryContainer,
-                        containerColor = SurfaceBright,
-                        labelColor = OnSurfaceVariant,
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
+                Spacer(Modifier.width(2.dp))
+                // Format
+                listOf("MP4", "GIF").forEach { fmt ->
+                    SmallChip(
+                        label = fmt,
                         selected = format == fmt,
-                        selectedBorderColor = Primary,
-                        borderColor = Outline,
+                        onClick = { onFormatChange(fmt) },
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                // Compact render button
+                FilledTonalButton(
+                    onClick = onRender,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                    modifier = Modifier.height(32.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
                     ),
-                )
+                ) {
+                    Icon(Icons.Outlined.PlayArrow, null,
+                        modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Render", style = MaterialTheme.typography.labelMedium)
+                }
             }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Estimate text
-            Text(
-                text = "~$estimatedTime",
-                style = MaterialTheme.typography.labelSmall,
-                color = OnSurfaceDim,
-            )
-        }
-
-        // Render button — full width orange pill
-        Button(
-            onClick = onRender,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(percent = 50),
-            colors = ButtonDefaults.buttonColors(containerColor = Primary),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.PlayArrow,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Render Animation",
-                style = MaterialTheme.typography.titleSmall,
-            )
         }
     }
+}
+
+@Composable
+fun SmallChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val bg by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primaryContainer
+                     else MaterialTheme.colorScheme.surfaceVariant,
+        animationSpec = tween(200), label = "chipBg",
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                     else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = tween(200), label = "chipText",
+    )
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = textColor,
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(bg)
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    )
 }

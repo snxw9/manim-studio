@@ -44,14 +44,6 @@ data class StudioUiState(
     val renderQuality: RenderQuality get() = settings.renderQuality
 }
 
-enum class StudioPhase {
-    IDLE,           // waiting for input
-    GENERATING,     // calling AI to make Manim code
-    RENDERING,      // proot running manim
-    DONE,           // video ready
-    ERROR,          // something failed
-}
-
 class StudioViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as ManimStudioApp

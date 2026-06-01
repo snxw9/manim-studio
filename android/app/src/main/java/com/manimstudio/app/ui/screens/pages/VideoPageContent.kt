@@ -10,38 +10,39 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.manimstudio.app.ui.components.VideoPlayerBubble
-import com.manimstudio.app.ui.theme.OnSurfaceVariant
-import com.manimstudio.app.ui.theme.Primary
 import java.io.File
 
 @Composable
 fun VideoPageContent(
     videoFile: File?,
     onExport: (File) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     if (videoFile == null) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
                 imageVector = Icons.Outlined.PlayCircleOutline,
                 contentDescription = null,
-                tint = OnSurfaceVariant,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(64.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "No animation rendered yet",
                 style = MaterialTheme.typography.titleMedium,
-                color = OnSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     } else {
         Column(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxSize()
+                .statusBarsPadding()
+                .padding(top = 60.dp) // space for top bar overlay
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -56,7 +57,7 @@ fun VideoPageContent(
             Button(
                 onClick = { onExport(videoFile) },
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 Icon(Icons.Outlined.Download, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))

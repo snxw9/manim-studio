@@ -21,8 +21,10 @@ val OnSurfaceDim = Color(0xFF6B6B6B)
 
 // Brand orange
 val Primary = Color(0xFFE8621A)
+val AccentOrange = Primary
 val PrimaryDim = Color(0xFFB34E14)
 val OnPrimary = Color(0xFFFFFFFF)
+val White = OnPrimary
 val PrimaryContainer = Color(0xFF2A1A0A)
 val OnPrimaryContainer = Color(0xFFFFB380)
 
@@ -34,7 +36,9 @@ val ErrorContainer = Color(0xFF2A0A0E)
 // Gradients
 val GradientOrangeGlow = Color(0x33E8621A)   // orange at 20% for bg glow
 val GradientBlueGlow = Color(0xFF1A1A6E)
+val GradientDeepBlue = GradientBlueGlow
 val GradientPurpleGlow = Color(0xFF6E1A6E)
+val GradientPurple = GradientPurpleGlow
 
 // Syntax highlighting (code editor)
 val CodeKeyword = Color(0xFFE8621A)      // orange — class, def, self

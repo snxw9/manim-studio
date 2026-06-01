@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,15 +23,14 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.manimstudio.app.ui.theme.Surface
-import com.manimstudio.app.ui.theme.OnBackground
 import java.io.File
 
 @OptIn(UnstableApi::class)
 @Composable
 fun VideoPlayerBubble(
     videoFile: File,
-    onExport: () -> Unit,
+    onExport: (() -> Unit)? = null,
+    autoPlay: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -41,7 +41,7 @@ fun VideoPlayerBubble(
             prepare()
             volume = 0f
             repeatMode = Player.REPEAT_MODE_ONE
-            playWhenReady = true
+            playWhenReady = autoPlay
         }
     }
 
@@ -56,7 +56,7 @@ fun VideoPlayerBubble(
             .fillMaxWidth()
             .aspectRatio(16f / 9f)
             .clip(RoundedCornerShape(24.dp))
-            .background(Surface)
+            .background(MaterialTheme.colorScheme.surface)
     ) {
         AndroidView(
             factory = { ctx ->
@@ -69,18 +69,20 @@ fun VideoPlayerBubble(
             modifier = Modifier.fillMaxSize()
         )
 
-        IconButton(
-            onClick = onExport,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(12.dp)
-                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Download, 
-                contentDescription = "Export", 
-                tint = OnBackground
-            )
+        if (onExport != null) {
+            IconButton(
+                onClick = onExport,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(12.dp)
+                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Download,
+                    contentDescription = "Export",
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
+            }
         }
     }
 }
