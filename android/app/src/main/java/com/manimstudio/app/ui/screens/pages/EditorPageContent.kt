@@ -4,8 +4,11 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.*
@@ -15,13 +18,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.manimstudio.app.data.models.ChatMessage
 import com.manimstudio.app.data.models.StudioPhase
-import com.manimstudio.app.ui.components.SyntaxHighlightedEditor
 
 @Composable
 fun EditorPageContent(
@@ -30,117 +40,103 @@ fun EditorPageContent(
     phase: StudioPhase,
     renderProgress: String,
     elapsedSeconds: Int,
-    messages: List<ChatMessage> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        // Code editor — full screen, starts from top
-        SyntaxHighlightedEditor(
-            code = code,
-            onCodeChanged = onCodeChanged,
+
+        // Code editor — scrollable, fills screen
+        // Uses a Column inside a verticalScroll so content isn't collapsed
+        val scrollState = rememberScrollState()
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 0.dp), // starts from very top
-        )
-
-        // Fade behind top bar (same as home page)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(120.dp)
-                .align(Alignment.TopStart)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.background,
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.8f),
-                            Color.Transparent,
-                        )
-                    )
-                )
-        )
-
-        // Rendering progress bar — slim, modern, under tab dots
-        AnimatedVisibility(
-            visible = phase == StudioPhase.RENDERING || phase == StudioPhase.GENERATING,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically(),
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 90.dp),
+                .verticalScroll(scrollState)
+                .padding(bottom = 56.dp), // just enough to clear console strip
         ) {
-            Column(
+            // Top spacer to clear the overlay top bar
+            Spacer(modifier = Modifier.height(96.dp))
+
+            // Line numbers + code side by side
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                    .padding(horizontal = 0.dp),
             ) {
-                // Animated shimmer progress bar
-                val transition = rememberInfiniteTransition(label = "shimmer")
-                val shimmerOffset by transition.animateFloat(
-                    initialValue = -1f, targetValue = 2f,
-                    animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing)),
-                    label = "shimmerOffset",
-                )
-                Box(
+                // Line numbers
+                val lines = code.lines()
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .clip(RoundedCornerShape(1.dp))
-                        .background(MaterialTheme.colorScheme.outlineVariant),
+                        .width(44.dp)
+                        .padding(top = 2.dp),
+                    horizontalAlignment = Alignment.End,
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.horizontalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        MaterialTheme.colorScheme.primary,
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                                        Color.Transparent,
-                                    ),
-                                    startX = shimmerOffset * 1000f,
-                                    endX = (shimmerOffset + 0.5f) * 1000f,
-                                )
-                            )
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = if (phase == StudioPhase.GENERATING)
-                            "Generating" else "Rendering",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = "${elapsedSeconds}s",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                    if (renderProgress.isNotEmpty()) {
+                    lines.forEachIndexed { i, _ ->
                         Text(
-                            text = "· ${renderProgress.takeLast(40)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            text = "${i + 1}",
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 13.sp,
+                            lineHeight = 22.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                            modifier = Modifier.padding(end = 12.dp),
                         )
                     }
                 }
+
+                // Code field
+                BasicTextField(
+                    value = code,
+                    onValueChange = onCodeChanged,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 16.dp),
+                    textStyle = TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp,
+                        lineHeight = 22.sp,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    // Simple visual transform for syntax colors
+                    visualTransformation = PythonSyntaxTransformation(),
+                    decorationBox = { innerTextField ->
+                        if (code.isEmpty()) {
+                            Text(
+                                "# Write Manim code here",
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                            )
+                        }
+                        innerTextField()
+                    },
+                )
             }
         }
 
-        // Console strip at bottom — stays visible
+        // Shimmer progress bar at top (under nav bar overlay)
+        AnimatedVisibility(
+            visible = phase == StudioPhase.RENDERING || phase == StudioPhase.GENERATING,
+            enter = fadeIn(tween(300)),
+            exit = fadeOut(tween(300)),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(top = 88.dp, start = 16.dp, end = 16.dp),
+        ) {
+            ShimmerProgressBar(
+                text = if (phase == StudioPhase.GENERATING) "Generating" else "Rendering",
+                elapsed = elapsedSeconds,
+                detail = renderProgress,
+            )
+        }
+
+        // Console bar — pinned at the very bottom of the editor page content
         Surface(
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+            color = MaterialTheme.colorScheme.surface,
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 160.dp), // above input bar
+                .padding(bottom = 8.dp), // just above page bottom to feel clean
         ) {
             Row(
                 modifier = Modifier
@@ -149,41 +145,49 @@ fun EditorPageContent(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(Icons.Outlined.Terminal, null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(13.dp))
-                    Text("CONSOLE",
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(
+                        Icons.Outlined.Terminal, null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Text(
+                        "CONSOLE",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        letterSpacing = 0.8.sp)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        letterSpacing = 0.8.sp,
+                    )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    // Status dot with pulse animation
-                    val pulseAnim = rememberInfiniteTransition(label = "pulse")
-                    val pulseAlpha by pulseAnim.animateFloat(
-                        initialValue = 1f, targetValue = 0.3f,
-                        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
-                        label = "pulseAlpha",
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    val transition = rememberInfiniteTransition(label = "dot")
+                    val dotAlpha by transition.animateFloat(
+                        initialValue = 1f, targetValue = 0.2f,
+                        animationSpec = infiniteRepeatable(
+                            tween(700, easing = EaseInOutSine), RepeatMode.Reverse
+                        ), label = "dotAlpha",
                     )
                     Box(
                         modifier = Modifier
-                            .size(7.dp)
+                            .size(6.dp)
                             .background(
-                                color = when(phase) {
+                                color = when (phase) {
                                     StudioPhase.RENDERING -> MaterialTheme.colorScheme.primary
-                                        .copy(alpha = if (phase == StudioPhase.RENDERING) pulseAlpha else 1f)
+                                        .copy(alpha = dotAlpha)
                                     StudioPhase.DONE -> Color(0xFF4CAF50)
                                     StudioPhase.ERROR -> MaterialTheme.colorScheme.error
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                                 },
                                 shape = CircleShape,
                             )
                     )
                     Text(
-                        text = when(phase) {
+                        text = when (phase) {
                             StudioPhase.RENDERING -> "Rendering"
                             StudioPhase.GENERATING -> "Generating"
                             StudioPhase.DONE -> "Ready"
@@ -191,9 +195,119 @@ fun EditorPageContent(
                             else -> "Idle"
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                     )
                 }
+            }
+        }
+
+        // Top fade overlay (so top bar icons stay readable over code)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
+                            Color.Transparent,
+                        )
+                    )
+                )
+        )
+    }
+}
+
+class PythonSyntaxTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val builder = AnnotatedString.Builder(text.text)
+        // Keywords
+        val keywords = listOf("from", "import", "class", "def", "self",
+            "return", "if", "else", "for", "in", "True", "False", "None",
+            "and", "or", "not", "while", "lambda", "pass", "break")
+        val raw = text.text
+        keywords.forEach { kw ->
+            var idx = 0
+            while (true) {
+                idx = raw.indexOf(kw, idx)
+                if (idx == -1) break
+                val before = if (idx > 0) raw[idx - 1] else ' '
+                val after = if (idx + kw.length < raw.length) raw[idx + kw.length] else ' '
+                if (!before.isLetterOrDigit() && before != '_' &&
+                    !after.isLetterOrDigit() && after != '_') {
+                    builder.addStyle(
+                        SpanStyle(color = Color(0xFFE8621A), fontWeight = FontWeight.SemiBold),
+                        idx, idx + kw.length,
+                    )
+                }
+                idx += kw.length
+            }
+        }
+        // Strings — simple single-line
+        val stringRegex = Regex("""(["'])(?:(?!\1)[^\\]|\\.)*\1""")
+        stringRegex.findAll(raw).forEach { match ->
+            builder.addStyle(
+                SpanStyle(color = Color(0xFF81C784)),
+                match.range.first, match.range.last + 1,
+            )
+        }
+        // Comments
+        val commentRegex = Regex("""#.*""")
+        commentRegex.findAll(raw).forEach { match ->
+            builder.addStyle(
+                SpanStyle(color = Color(0xFF616161), fontStyle = FontStyle.Italic),
+                match.range.first, match.range.last + 1,
+            )
+        }
+        return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+    }
+}
+
+@Composable
+fun ShimmerProgressBar(text: String, elapsed: Int, detail: String) {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerX by transition.animateFloat(
+        initialValue = -300f, targetValue = 1500f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing)),
+        label = "shimmerX",
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(2.dp)
+                .clip(RoundedCornerShape(1.dp))
+                .background(MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize().background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            MaterialTheme.colorScheme.primary,
+                            Color.Transparent,
+                        ),
+                        startX = shimmerX,
+                        endX = shimmerX + 300f,
+                    )
+                )
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(text, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary)
+            Text("${elapsed}s", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontFamily = FontFamily.Monospace)
+            if (detail.isNotEmpty()) {
+                Text(
+                    "· ${detail.takeLast(35)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

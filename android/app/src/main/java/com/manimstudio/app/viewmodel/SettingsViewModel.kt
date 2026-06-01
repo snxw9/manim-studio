@@ -82,6 +82,10 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun updateFontOption(option: FontOption) {
+        updateThemeSettings(_settings.value.themeSettings.copy(fontOption = option))
+    }
+
     fun updateQuality(quality: RenderQuality) = save("quality", quality.name) {
         _settings.value = _settings.value.copy(renderQuality = quality)
     }

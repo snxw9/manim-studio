@@ -22,6 +22,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.manimstudio.app.data.models.RenderQuality
+import com.manimstudio.app.data.models.FontOption
 import com.manimstudio.app.viewmodel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,6 +41,7 @@ fun SettingsScreen(
     var showNameDialog by remember { mutableStateOf(false) }
     var showReinstallDialog by remember { mutableStateOf(false) }
     var showSaveLocationDialog by remember { mutableStateOf(false) }
+    var showFontDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -119,6 +121,32 @@ fun SettingsScreen(
                             }
                         },
                         modifier = Modifier.clickable { onNavigateToTheme() },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp))
+                    ListItem(
+                        headlineContent = { Text("Font", color = MaterialTheme.colorScheme.onSurface) },
+                        supportingContent = {
+                            Text("App interface font",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        },
+                        trailingContent = {
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    if (settings.themeSettings.fontOption == FontOption.INTER) "Inter"
+                                    else "System default",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null,
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(18.dp))
+                            }
+                        },
+                        modifier = Modifier.clickable { showFontDialog = true },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
@@ -535,6 +563,53 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(location, color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+        )
+    }
+
+    if (showFontDialog) {
+        AlertDialog(
+            onDismissRequest = { showFontDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            title = { Text("Font", color = MaterialTheme.colorScheme.onSurface) },
+            text = {
+                Column {
+                    listOf(
+                        FontOption.INTER to "Inter" to "Clean, modern sans-serif",
+                        FontOption.SYSTEM to "System default" to "Uses your device font",
+                    ).forEach { (pair, desc) ->
+                        val (option, label) = pair
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    settingsViewModel.updateFontOption(option)
+                                    showFontDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = settings.themeSettings.fontOption == option,
+                                onClick = {
+                                    settingsViewModel.updateFontOption(option)
+                                    showFontDialog = false
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = MaterialTheme.colorScheme.primary,
+                                ),
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(label, color = MaterialTheme.colorScheme.onSurface,
+                                    style = MaterialTheme.typography.bodyLarge)
+                                Text(desc, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                 }

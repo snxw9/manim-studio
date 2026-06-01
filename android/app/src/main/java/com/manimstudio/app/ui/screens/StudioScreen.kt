@@ -1,7 +1,7 @@
 package com.manimstudio.app.ui.screens
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -11,10 +11,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.manimstudio.app.data.models.StudioPhase
@@ -65,6 +63,7 @@ fun StudioScreen(
                 onTemplatesClick = { viewModel.showTemplates() },
                 recentChats = uiState.recentChats,
                 onSelectChat = { /* load chat */ scope.launch { drawerState.close() } },
+                userName = uiState.userName,
                 onClose = { scope.launch { drawerState.close() } },
             )
         },
@@ -122,7 +121,6 @@ fun StudioScreen(
                             phase = uiState.phase,
                             renderProgress = uiState.renderProgress,
                             elapsedSeconds = uiState.elapsedSeconds,
-                            messages = uiState.messages,
                             modifier = Modifier.fillMaxSize(),
                         )
                         2 -> VideoPageContent(
@@ -179,14 +177,18 @@ fun StudioScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 12.dp)
-                    .navigationBarsPadding(),
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                // Render chips — only on editor page when idle
                 AnimatedVisibility(
-                    visible = pagerState.currentPage == 1 && uiState.phase == StudioPhase.IDLE,
-                    enter = fadeIn() + slideInVertically { it },
-                    exit = fadeOut() + slideOutVertically { it },
+                    visible = pagerState.currentPage == 1 &&
+                              uiState.phase == StudioPhase.IDLE,
+                    enter = fadeIn(tween(200)) + slideInVertically(
+                        animationSpec = spring(Spring.DampingRatioMediumBouncy)
+                    ) { it },
+                    exit = fadeOut(tween(150)) + slideOutVertically { it },
                 ) {
                     CompactRenderChips(
                         quality = uiState.renderQuality,
@@ -194,7 +196,6 @@ fun StudioScreen(
                         onQualityChange = viewModel::onQualityChanged,
                         onFormatChange = viewModel::onFormatChanged,
                         onRender = viewModel::onRenderFromEditor,
-                        modifier = Modifier.padding(bottom = 6.dp),
                     )
                 }
                 
@@ -210,31 +211,23 @@ fun StudioScreen(
                 )
             }
 
-            // ── LAYER 6: Engine dropdown (above input, below status bar) ──
-            AnimatedVisibility(
+            // ── LAYER 6: Bottom Sheets for Engine & Templates ──
+            EngineBottomSheet(
                 visible = uiState.showEngineSelector,
-                enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom) +
-                        scaleIn(
-                            initialScale = 0.95f,
-                            transformOrigin = TransformOrigin(0.2f, 1f)
-                        ),
-                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom) +
-                       scaleOut(
-                           targetScale = 0.95f,
-                           transformOrigin = TransformOrigin(0.2f, 1f)
-                       ),
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 16.dp, bottom = 130.dp) // above input bar
-                    .widthIn(max = 300.dp)
-                    .zIndex(10f),
-            ) {
-                EngineSelectorDropdown(
-                    selected = uiState.selectedEngine,
-                    onSelect = viewModel::onEngineSelected,
-                    onDismiss = viewModel::toggleEngineSelector,
-                )
-            }
+                selected = uiState.selectedEngine,
+                onSelect = viewModel::onEngineSelected,
+                onDismiss = viewModel::toggleEngineSelector,
+            )
+
+            TemplatePickerSheet(
+                visible = uiState.showTemplatePicker,
+                templates = uiState.templates,
+                onSelectTemplate = { template ->
+                    viewModel.onTemplateSelected(template.id)
+                    scope.launch { pagerState.animateScrollToPage(1) }
+                },
+                onDismiss = { viewModel.hideTemplatePicker() },
+            )
         }
     }
 }

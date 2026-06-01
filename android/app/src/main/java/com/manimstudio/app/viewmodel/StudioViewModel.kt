@@ -40,6 +40,8 @@ data class StudioUiState(
     val renderFormat: String = "MP4",
     val lastVideoFile: File? = null,
     val userName: String = "Abdulfatai",
+    val showTemplatePicker: Boolean = false,
+    val templates: List<Template> = emptyList(),
 ) {
     val renderQuality: RenderQuality get() = settings.renderQuality
 }
@@ -56,6 +58,11 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
 
     private var timerJob: Job? = null
     private var renderJob: Job? = null
+
+    init {
+        val templates = templateRepository.getTemplates()
+        _uiState.update { it.copy(templates = templates) }
+    }
 
     fun onInputChanged(text: String) {
         _uiState.update { it.copy(inputText = text) }
@@ -106,9 +113,11 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun showTemplates() {
-        // This would typically trigger a UI state change to show templates
-        // For now, we can just log or add a message
-        addMessage(ChatMessage(type = MessageType.SYSTEM_STATUS, content = "Opening templates..."))
+        _uiState.update { it.copy(showTemplatePicker = true) }
+    }
+
+    fun hideTemplatePicker() {
+        _uiState.update { it.copy(showTemplatePicker = false) }
     }
 
     private fun startRendering(code: String, quality: RenderQuality) {
@@ -148,12 +157,12 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
     fun onTemplateSelected(templateId: String) {
         val template = templateRepository.getTemplateById(templateId) ?: return
         
-        viewModelScope.launch {
-            addMessage(ChatMessage(type = MessageType.USER_PROMPT, content = "Use template: ${template.name}"))
-            addMessage(ChatMessage(type = MessageType.SYSTEM_STATUS, content = "Using template: ${template.name}"))
-            
-            startRendering(template.code, _uiState.value.settings.renderQuality)
-        }
+        _uiState.update { it.copy(
+            generatedCode = template.code,
+            phase = StudioPhase.IDLE,
+            showTemplatePicker = false
+        ) }
+        addMessage(ChatMessage(type = MessageType.SYSTEM_STATUS, content = "Template loaded: ${template.name}"))
     }
 
     fun onNewChat() {

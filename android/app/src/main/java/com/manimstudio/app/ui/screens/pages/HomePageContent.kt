@@ -3,6 +3,7 @@ package com.manimstudio.app.ui.screens.pages
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.EaseInOutSine
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -146,11 +147,21 @@ fun CyclingSuggestions(
             )
         }
 
-        // Pure cross-fade — no sliding
+        // Pure cross-fade — absolutely no slide in any direction
         AnimatedContent(
             targetState = currentPage,
             transitionSpec = {
-                fadeIn(tween(500)) togetherWith fadeOut(tween(350))
+                fadeIn(
+                    animationSpec = tween(
+                        durationMillis = 500,
+                        easing = EaseInOutSine,
+                    )
+                ) togetherWith fadeOut(
+                    animationSpec = tween(
+                        durationMillis = 350,
+                        easing = EaseInOutSine,
+                    )
+                ) using SizeTransform(clip = false)
             },
             label = "suggestionFade",
         ) { page ->
