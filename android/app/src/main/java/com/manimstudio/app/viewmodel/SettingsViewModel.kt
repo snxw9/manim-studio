@@ -23,23 +23,43 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             // Load saved settings from DataStore on init
             dataStore.data.collect { prefs ->
+                val themeColor = try {
+                    val colorStr = prefs[stringPreferencesKey("theme_color")] ?: "ORANGE"
+                    ThemeColor.valueOf(colorStr.uppercase())
+                } catch (e: Exception) {
+                    ThemeColor.ORANGE
+                }
+
+                val themeMode = try {
+                    val modeStr = prefs[stringPreferencesKey("theme_mode")] ?: "SYSTEM"
+                    ThemeMode.valueOf(modeStr.uppercase())
+                } catch (e: Exception) {
+                    ThemeMode.SYSTEM
+                }
+
+                val fontOption = try {
+                    val fontStr = prefs[stringPreferencesKey("font_option")] ?: "INTER"
+                    FontOption.valueOf(fontStr.uppercase())
+                } catch (e: Exception) {
+                    FontOption.INTER
+                }
+
+                val renderQuality = try {
+                    val qualityStr = prefs[stringPreferencesKey("quality")] ?: "MID"
+                    RenderQuality.valueOf(qualityStr.uppercase())
+                } catch (e: Exception) {
+                    RenderQuality.MID
+                }
+
                 _settings.value = AppSettings(
                     themeSettings = ThemeSettings(
                         useMaterialYou = prefs[booleanPreferencesKey("use_material_you")] ?: true,
-                        themeColor = ThemeColor.valueOf(
-                            prefs[stringPreferencesKey("theme_color")] ?: "ORANGE"
-                        ),
-                        themeMode = ThemeMode.valueOf(
-                            prefs[stringPreferencesKey("theme_mode")] ?: "SYSTEM"
-                        ),
+                        themeColor = themeColor,
+                        themeMode = themeMode,
                         pureBlackBackground = prefs[booleanPreferencesKey("pure_black")] ?: true,
-                        fontOption = FontOption.valueOf(
-                            prefs[stringPreferencesKey("font_option")] ?: "INTER"
-                        )
+                        fontOption = fontOption
                     ),
-                    renderQuality = RenderQuality.valueOf(
-                        prefs[stringPreferencesKey("quality")] ?: "MID"
-                    ),
+                    renderQuality = renderQuality,
                     apiProvider = prefs[stringPreferencesKey("provider")] ?: "auto",
                     groqApiKey = prefs[stringPreferencesKey("groq_key")] ?: "",
                     geminiApiKey = prefs[stringPreferencesKey("gemini_key")] ?: "",

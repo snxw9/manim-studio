@@ -196,6 +196,7 @@ fun WelcomeRenderPhase(
         renderState = WelcomeRenderState.RENDERING
 
         val welcomeCode = """
+import random
 from manim import *
 
 class WelcomeScene(Scene):
