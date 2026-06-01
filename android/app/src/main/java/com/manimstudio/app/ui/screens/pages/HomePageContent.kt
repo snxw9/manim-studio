@@ -27,6 +27,7 @@ import com.manimstudio.app.data.models.ChatMessage
 import com.manimstudio.app.data.models.SuggestionCard
 import com.manimstudio.app.ui.components.ChatMessageItem
 import com.manimstudio.app.ui.components.animations.SparkIcon
+import kotlinx.coroutines.delay
 
 @Composable
 fun HomePageContent(
