@@ -30,76 +30,103 @@ import com.manimstudio.app.ui.components.ChatMessageItem
 import com.manimstudio.app.ui.components.animations.SparkIcon
 import kotlinx.coroutines.delay
 
+import androidx.compose.material3.pulltorefresh.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomePageContent(
     userName: String,
     suggestions: List<SuggestionCard>,
     onSuggestionClick: (SuggestionCard) -> Unit,
     messages: List<ChatMessage>,
+    onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (messages.isEmpty()) {
-        // Empty state — centered welcome
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .padding(top = 60.dp) // space for top bar overlay
-                .padding(bottom = 140.dp) // space for floating input + chips
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Spacer(modifier = Modifier.weight(1f))
+    var isRefreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
-            // Animated spark icon
-            SparkIcon(
-                modifier = Modifier.size(56.dp),
-                color = MaterialTheme.colorScheme.primary,
-            )
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            scope.launch {
+                delay(800)
+                onRefresh()
+                isRefreshing = false
+            }
+        },
+        modifier = modifier.fillMaxSize()
+    ) {
+        if (messages.isEmpty()) {
+            // Empty state — centered welcome
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .padding(top = 60.dp) // space for top bar overlay
+                    .padding(bottom = 140.dp) // space for floating input + chips
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Spacer(modifier = Modifier.weight(1f))
 
-            Spacer(modifier = Modifier.height(24.dp))
+                // Animated spark icon
+                SparkIcon(
+                    modifier = Modifier.size(56.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                )
 
-            Text(
-                text = "Hi $userName,",
-                style = MaterialTheme.typography.displayLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = "what's on your mind?",
-                style = MaterialTheme.typography.displayLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 32.dp),
-            )
+                Spacer(modifier = Modifier.height(24.dp))
 
-            Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "Hi $userName,",
+                    style = MaterialTheme.typography.displayLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = "what's on your mind?",
+                    style = MaterialTheme.typography.displayLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 32.dp),
+                )
 
-            // Suggestions section
-            CyclingSuggestions(
-                suggestions = if (suggestions.isEmpty()) defaultSuggestions else suggestions,
-                onSuggestionClick = onSuggestionClick,
-            )
-        }
-    } else {
-        // Has messages — show chat history
-        LazyColumn(
-            modifier = modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .padding(top = 60.dp), // space for top bar overlay
-            contentPadding = PaddingValues(
-                top = 16.dp, bottom = 120.dp,
-                start = 16.dp, end = 16.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(messages, key = { it.id }) { message ->
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn() + slideInVertically { it / 3 },
-                ) {
-                    ChatMessageItem(message = message)
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Suggestions section
+                CyclingSuggestions(
+                    suggestions = if (suggestions.isEmpty()) defaultSuggestions else suggestions,
+                    onSuggestionClick = onSuggestionClick,
+                )
+            }
+        } else {
+            // Has messages — show chat history
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .padding(top = 60.dp), // space for top bar overlay
+                contentPadding = PaddingValues(
+                    top = 16.dp, bottom = 120.dp,
+                    start = 16.dp, end = 16.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(messages, key = { it.id }) { message ->
+                    var visible by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) { visible = true }
+                    AnimatedVisibility(
+                        visible = visible,
+                        enter = fadeIn(tween(300)) + slideInVertically(
+                            animationSpec = spring(Spring.DampingRatioMediumBouncy),
+                        ) { it / 2 },
+                    ) {
+                        ChatMessageItem(message = message)
+                    }
                 }
             }
         }

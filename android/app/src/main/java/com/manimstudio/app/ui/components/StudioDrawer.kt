@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.manimstudio.app.data.models.RecentChat
 
+import com.manimstudio.app.ui.components.animations.GlobalGradientBackground
+
 @Composable
 fun StudioDrawer(
     onNewChat: () -> Unit,
@@ -45,7 +47,9 @@ fun StudioDrawer(
         drawerContainerColor = MaterialTheme.colorScheme.background,
         modifier = Modifier.width(320.dp).fillMaxHeight(),
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            GlobalGradientBackground(intensity = 0.4f, animate = true)
+            Column(modifier = Modifier.fillMaxSize()) {
             // Header — large title
             Row(
                 modifier = Modifier
@@ -170,6 +174,7 @@ fun StudioDrawer(
                         fontWeight = FontWeight.SemiBold)
                 }
             }
+        }
         }
     }
 }

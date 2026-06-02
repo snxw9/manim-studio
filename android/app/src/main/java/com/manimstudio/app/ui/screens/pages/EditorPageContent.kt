@@ -3,8 +3,6 @@ package com.manimstudio.app.ui.screens.pages
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Canvas
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -45,92 +43,112 @@ fun EditorPageContent(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
-        // Subtle horizontal line grid — like a notebook/editor
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val lineHeight = 22.dp.toPx() // match text lineHeight
-            val lineColor = Color.White.copy(alpha = 0.025f)
-            var y = 96.dp.toPx() // start after the top bar fade area
-            while (y < size.height) {
-                drawLine(
-                    color = lineColor,
-                    start = Offset(0f, y),
-                    end = Offset(size.width, y),
-                    strokeWidth = 0.5.dp.toPx(),
+        // Editor background — slightly different from page bg
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    MaterialTheme.colorScheme.background
                 )
-                y += lineHeight
-            }
-        }
+        )
 
-        // Code editor — scrollable, fills screen
-        // Uses a Column inside a verticalScroll so content isn't collapsed
         val scrollState = rememberScrollState()
-        Column(
+
+        // Main scrollable editor
+        Row(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(bottom = 56.dp), // just enough to clear console strip
+                .padding(
+                    top = 96.dp, // clears top bar overlay
+                    bottom = 280.dp, // clears render chips + input
+                ),
         ) {
-            // Top spacer to clear the overlay top bar
-            Spacer(modifier = Modifier.height(96.dp))
-
-            // Line numbers + code side by side
-            Row(
+            // Line numbers column
+            val lines = if (code.isEmpty()) listOf("") else code.lines()
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 0.dp),
+                    .width(48.dp)
+                    .padding(top = 2.dp),
+                horizontalAlignment = Alignment.End,
             ) {
-                // Line numbers
-                val lines = code.lines()
-                Column(
-                    modifier = Modifier
-                        .width(44.dp)
-                        .padding(top = 2.dp),
-                    horizontalAlignment = Alignment.End,
-                ) {
-                    lines.forEachIndexed { i, _ ->
+                lines.forEachIndexed { i, _ ->
+                    Text(
+                        text = "${i + 1}",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        lineHeight = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                        modifier = Modifier.padding(end = 14.dp),
+                    )
+                }
+            }
+
+            // Vertical divider
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(22.dp * lines.size.coerceAtLeast(1)) // explicitly heighted to cover all lines
+                    .padding(vertical = 2.dp)
+                    .background(
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
+            )
+
+            // Code input
+            BasicTextField(
+                value = code,
+                onValueChange = onCodeChanged,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 14.dp, end = 16.dp),
+                textStyle = TextStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    lineHeight = 22.sp,
+                    color = MaterialTheme.colorScheme.onBackground,
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                visualTransformation = PythonSyntaxTransformation(),
+                decorationBox = { inner ->
+                    if (code.isEmpty()) {
                         Text(
-                            text = "${i + 1}",
+                            "# Write Manim code here\n# or describe what you want below",
                             fontFamily = FontFamily.Monospace,
                             fontSize = 13.sp,
                             lineHeight = 22.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                            modifier = Modifier.padding(end = 12.dp),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
                         )
                     }
-                }
+                    inner()
+                },
+            )
+        }
 
-                // Code field
-                BasicTextField(
-                    value = code,
-                    onValueChange = onCodeChanged,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 16.dp),
-                    textStyle = TextStyle(
+        // Language badge (top-right of editor area, below top bar)
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 100.dp, end = 12.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+            ) {
+                Text(
+                    "Python",
+                    style = TextStyle(
                         fontFamily = FontFamily.Monospace,
-                        fontSize = 13.sp,
-                        lineHeight = 22.sp,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        letterSpacing = 0.5.sp,
                     ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    // Simple visual transform for syntax colors
-                    visualTransformation = PythonSyntaxTransformation(),
-                    decorationBox = { innerTextField ->
-                        if (code.isEmpty()) {
-                            Text(
-                                "# Write Manim code here",
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                            )
-                        }
-                        innerTextField()
-                    },
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 )
             }
         }
 
-        // Shimmer progress bar at top (under nav bar overlay)
+        // Shimmer progress bar
         AnimatedVisibility(
             visible = phase == StudioPhase.RENDERING || phase == StudioPhase.GENERATING,
             enter = fadeIn(tween(300)),
@@ -138,7 +156,7 @@ fun EditorPageContent(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .padding(top = 88.dp, start = 16.dp, end = 16.dp),
+                .padding(top = 84.dp, start = 16.dp, end = 16.dp),
         ) {
             ShimmerProgressBar(
                 text = if (phase == StudioPhase.GENERATING) "Generating" else "Rendering",
@@ -147,78 +165,117 @@ fun EditorPageContent(
             )
         }
 
-        // Console bar — pinned at the very bottom of the editor page content
+        // Console — pinned above render chips
         Surface(
-            color = MaterialTheme.colorScheme.surface,
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
             modifier = Modifier
-                .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 8.dp), // just above page bottom to feel clean
+                .fillMaxWidth()
+                .padding(bottom = 168.dp), // above CompactRenderChips (50dp) + input (90dp) + gap
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
             ) {
+                // Console header row
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Icon(
-                        Icons.Outlined.Terminal, null,
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                        modifier = Modifier.size(13.dp),
-                    )
-                    Text(
-                        "CONSOLE",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                        letterSpacing = 0.8.sp,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.Terminal, null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            "CONSOLE",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                            letterSpacing = 0.8.sp,
+                            fontSize = 10.sp,
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        // Pulsing status dot
+                        val dotTransition = rememberInfiniteTransition(label = "dot")
+                        val dotAlpha by dotTransition.animateFloat(
+                            initialValue = 1f, targetValue = 0.2f,
+                            animationSpec = infiniteRepeatable(
+                                tween(700), RepeatMode.Reverse
+                            ), label = "dotA",
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(
+                                    when (phase) {
+                                        StudioPhase.RENDERING ->
+                                            MaterialTheme.colorScheme.primary.copy(alpha = dotAlpha)
+                                        StudioPhase.DONE -> Color(0xFF4CAF50)
+                                        StudioPhase.ERROR ->
+                                            MaterialTheme.colorScheme.error
+                                        else ->
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                                    },
+                                    CircleShape,
+                                )
+                        )
+                        Text(
+                            text = when (phase) {
+                                StudioPhase.RENDERING -> "Rendering"
+                                StudioPhase.GENERATING -> "Generating"
+                                StudioPhase.DONE -> "Ready"
+                                StudioPhase.ERROR -> "Error"
+                                else -> "Idle"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = when (phase) {
+                                StudioPhase.DONE -> Color(0xFF4CAF50)
+                                StudioPhase.ERROR -> MaterialTheme.colorScheme.error
+                                StudioPhase.RENDERING, StudioPhase.GENERATING ->
+                                    MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                            },
+                            fontSize = 10.sp,
+                        )
+                    }
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                ) {
-                    val transition = rememberInfiniteTransition(label = "dot")
-                    val dotAlpha by transition.animateFloat(
-                        initialValue = 1f, targetValue = 0.2f,
-                        animationSpec = infiniteRepeatable(
-                            tween(700, easing = EaseInOutSine), RepeatMode.Reverse
-                        ), label = "dotAlpha",
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .background(
-                                color = when (phase) {
-                                    StudioPhase.RENDERING -> MaterialTheme.colorScheme.primary
-                                        .copy(alpha = dotAlpha)
-                                    StudioPhase.DONE -> Color(0xFF4CAF50)
-                                    StudioPhase.ERROR -> MaterialTheme.colorScheme.error
-                                    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                                },
-                                shape = CircleShape,
-                            )
-                    )
+
+                // Console output lines
+                if (renderProgress.isNotEmpty()) {
                     Text(
-                        text = when (phase) {
-                            StudioPhase.RENDERING -> "Rendering"
-                            StudioPhase.GENERATING -> "Generating"
-                            StudioPhase.DONE -> "Ready"
-                            StudioPhase.ERROR -> "Error"
-                            else -> "Idle"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        text = renderProgress.takeLast(80),
+                        style = TextStyle(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.sp,
+                            color = when {
+                                renderProgress.contains("error", ignoreCase = true) ->
+                                    MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                                renderProgress.contains("warning", ignoreCase = true) ->
+                                    Color(0xFFFFB74D)
+                                else ->
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            },
+                            lineHeight = 16.sp,
+                        ),
+                        modifier = Modifier.padding(top = 4.dp),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
         }
 
-        // Top fade overlay (so top bar icons stay readable over code)
+        // Top fade
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -228,7 +285,7 @@ fun EditorPageContent(
                     Brush.verticalGradient(
                         colors = listOf(
                             MaterialTheme.colorScheme.background,
-                            MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.9f),
                             Color.Transparent,
                         )
                     )

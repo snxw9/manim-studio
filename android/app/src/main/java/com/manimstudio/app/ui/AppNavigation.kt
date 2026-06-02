@@ -15,7 +15,9 @@ import com.manimstudio.app.ui.screens.OnboardingScreen
 import com.manimstudio.app.ui.screens.SettingsScreen
 import com.manimstudio.app.ui.screens.StudioScreen
 import com.manimstudio.app.ui.screens.ThemeSettingsScreen
+import com.manimstudio.app.ui.screens.TemplatesScreen
 import com.manimstudio.app.viewmodel.SettingsViewModel
+import com.manimstudio.app.viewmodel.StudioViewModel
 
 @Composable
 fun AppNavigation(settingsViewModel: SettingsViewModel) {
@@ -68,6 +70,7 @@ fun AppNavigation(settingsViewModel: SettingsViewModel) {
             StudioScreen(
                 viewModel = viewModel(),
                 onNavigateToSettings = { navController.navigate("settings") },
+                onNavigateToTemplates = { navController.navigate("templates") },
             )
         }
 
@@ -83,6 +86,36 @@ fun AppNavigation(settingsViewModel: SettingsViewModel) {
             ThemeSettingsScreen(
                 themeSettings = settings.themeSettings,
                 onUpdate = { settingsViewModel.updateThemeSettings(it) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(
+            "templates",
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Start,
+                    spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow),
+                )
+            },
+            exitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium),
+                )
+            },
+        ) {
+            val viewModel: StudioViewModel = viewModel()
+            val uiState by viewModel.uiState.collectAsState()
+            val templates = uiState.templates
+            TemplatesScreen(
+                templates = templates,
+                onSelectTemplate = { template ->
+                    viewModel.onTemplateSelected(template.id)
+                    navController.navigate("studio") {
+                        popUpTo("studio") { inclusive = true }
+                    }
+                },
                 onBack = { navController.popBackStack() },
             )
         }

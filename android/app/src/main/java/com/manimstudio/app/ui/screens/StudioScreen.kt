@@ -22,6 +22,7 @@ import com.manimstudio.app.data.models.StudioPhase
 import com.manimstudio.app.ui.components.*
 import com.manimstudio.app.ui.components.animations.AmbientGlow
 import com.manimstudio.app.ui.components.animations.RenderingGradientBackground
+import com.manimstudio.app.ui.components.animations.GlobalGradientBackground
 import com.manimstudio.app.ui.screens.pages.EditorPageContent
 import com.manimstudio.app.ui.screens.pages.HomePageContent
 import com.manimstudio.app.ui.screens.pages.VideoPageContent
@@ -34,6 +35,7 @@ import kotlin.math.abs
 fun StudioScreen(
     viewModel: StudioViewModel,
     onNavigateToSettings: () -> Unit,
+    onNavigateToTemplates: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -71,7 +73,7 @@ fun StudioScreen(
                 onNewChat = { viewModel.onNewChat(); scope.launch { drawerState.close() } },
                 onNavigateToSettings = onNavigateToSettings,
                 onGalleryClick = { /* navigate to gallery */ },
-                onTemplatesClick = { viewModel.showTemplates() },
+                onTemplatesClick = onNavigateToTemplates,
                 recentChats = uiState.recentChats,
                 onSelectChat = { /* load chat */ scope.launch { drawerState.close() } },
                 userName = uiState.userName,
@@ -86,11 +88,7 @@ fun StudioScreen(
                 .background(MaterialTheme.colorScheme.background),
         ) {
             // ── LAYER 1: full-screen gradient (behind everything) ──
-            AmbientGlow(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 0.dp) // sits at very bottom
-            )
+            GlobalGradientBackground()
             AnimatedVisibility(
                 visible = isRendering,
                 enter = fadeIn(tween(800)),
@@ -128,6 +126,7 @@ fun StudioScreen(
                                 viewModel.onSendPrompt()
                             },
                             messages = uiState.messages,
+                            onRefresh = viewModel::onNewChat,
                             modifier = Modifier.fillMaxSize(),
                         )
                         1 -> EditorPageContent(

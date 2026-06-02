@@ -29,6 +29,7 @@ import com.manimstudio.app.engine.ManimRenderer
 import com.manimstudio.app.engine.SetupViewModel
 import com.manimstudio.app.ui.components.VideoPlayerBubble
 import com.manimstudio.app.ui.components.animations.AmbientGlow
+import com.manimstudio.app.ui.components.animations.GlobalGradientBackground
 import com.manimstudio.app.ui.components.animations.RenderingGradientBackground
 import com.manimstudio.app.ui.components.animations.SparkIcon
 import com.manimstudio.app.ui.theme.*
@@ -61,8 +62,8 @@ fun OnboardingScreen(
             .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center,
     ) {
-        // Background ambient glow
-        AmbientGlow(modifier = Modifier.align(Alignment.BottomCenter))
+        // Background animated gradient
+        GlobalGradientBackground(intensity = 0.35f, animate = true)
 
         AnimatedContent(
             targetState = phase,

@@ -11,6 +11,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,9 +34,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.input.key.*
 import com.manimstudio.app.ui.components.editor.CodeCompletionEngine
 import com.manimstudio.app.ui.components.editor.Completion
 import com.manimstudio.app.ui.components.editor.CompletionType
+import com.manimstudio.app.ui.components.editor.Difficulty
 import com.manimstudio.app.ui.theme.*
 import kotlinx.coroutines.delay
 
@@ -50,6 +54,14 @@ fun SyntaxHighlightedEditor(
     var completions by remember { mutableStateOf(emptyList<Completion>()) }
     var showCompletions by remember { mutableStateOf(false) }
     var currentWord by remember { mutableStateOf("") }
+    var selectedCompletionIndex by remember { mutableIntStateOf(0) }
+
+    // Sync external code changes
+    LaunchedEffect(code) {
+        if (code != textFieldValue.text) {
+            textFieldValue = textFieldValue.copy(text = code)
+        }
+    }
 
     // Debounce completion lookup
     LaunchedEffect(textFieldValue.text, textFieldValue.selection.start) {
@@ -60,6 +72,7 @@ fun SyntaxHighlightedEditor(
             CodeCompletionEngine.getSuggestions(currentWord, textFieldValue.text, 0)
         } else emptyList()
         showCompletions = completions.isNotEmpty()
+        selectedCompletionIndex = 0
     }
 
     Box(modifier = modifier.background(MaterialTheme.colorScheme.background)) {
@@ -86,7 +99,7 @@ fun SyntaxHighlightedEditor(
                 }
             }
             Spacer(Modifier.width(12.dp))
-            // Code input
+            // Code input with Keyboard Interception
             BasicTextField(
                 value = textFieldValue,
                 onValueChange = { new ->
@@ -109,7 +122,36 @@ fun SyntaxHighlightedEditor(
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .padding(top = 16.dp, end = 16.dp, bottom = 200.dp),
+                    .padding(top = 16.dp, end = 16.dp, bottom = 200.dp)
+                    .onKeyEvent { event ->
+                        if (!showCompletions) return@onKeyEvent false
+                        when {
+                            event.key == Key.DirectionDown && event.type == KeyEventType.KeyDown -> {
+                                selectedCompletionIndex =
+                                    (selectedCompletionIndex + 1).coerceAtMost(completions.size - 1)
+                                true
+                            }
+                            event.key == Key.DirectionUp && event.type == KeyEventType.KeyDown -> {
+                                selectedCompletionIndex =
+                                    (selectedCompletionIndex - 1).coerceAtLeast(0)
+                                true
+                            }
+                            event.key == Key.Enter && event.type == KeyEventType.KeyDown && showCompletions -> {
+                                completions.getOrNull(selectedCompletionIndex)?.let { c ->
+                                    insertCompletion(c, textFieldValue, onCodeChanged) { newValue ->
+                                        textFieldValue = newValue
+                                    }
+                                    showCompletions = false
+                                }
+                                true
+                            }
+                            event.key == Key.Escape -> {
+                                showCompletions = false
+                                true
+                            }
+                            else -> false
+                        }
+                    },
                 textStyle = TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 13.sp,
@@ -134,37 +176,156 @@ fun SyntaxHighlightedEditor(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 52.dp, bottom = 210.dp)
-                .widthIn(max = 300.dp)
                 .zIndex(100f),
         ) {
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            ) {
-                Column {
-                    completions.take(5).forEach { completion ->
-                        CompletionItem(
-                            completion = completion,
-                            onClick = {
-                                val cursor = textFieldValue.selection.start
-                                val word = CodeCompletionEngine.getCurrentWord(
-                                    textFieldValue.text, cursor)
-                                val insertText = completion.expandTo ?: completion.label
-                                val before = textFieldValue.text.substring(0, cursor - word.length)
-                                val after = textFieldValue.text.substring(cursor)
-                                val newText = before + insertText + after
-                                val newCursor = before.length + insertText.length
-                                textFieldValue = TextFieldValue(
-                                    text = newText,
-                                    selection = TextRange(newCursor),
-                                )
-                                onCodeChanged(newText)
-                                showCompletions = false
-                            },
+            CodeCompletionPopup(
+                completions = completions,
+                selectedIndex = selectedCompletionIndex,
+                onSelect = { completion ->
+                    insertCompletion(completion, textFieldValue, onCodeChanged) { newValue ->
+                        textFieldValue = newValue
+                    }
+                    showCompletions = false
+                },
+                onDismiss = { showCompletions = false }
+            )
+        }
+    }
+}
+
+fun insertCompletion(
+    completion: Completion,
+    currentValue: TextFieldValue,
+    onCodeChanged: (String) -> Unit,
+    onUpdateValue: (TextFieldValue) -> Unit,
+) {
+    val cursor = currentValue.selection.start
+    val word = CodeCompletionEngine.getCurrentWord(currentValue.text, cursor)
+    val insertText = completion.expandTo ?: completion.label
+    val before = currentValue.text.substring(0, cursor - word.length)
+    val after = currentValue.text.substring(cursor)
+    val newText = before + insertText + after
+    val newCursor = before.length + insertText.length
+    onUpdateValue(TextFieldValue(
+        text = newText,
+        selection = TextRange(newCursor),
+    ))
+    onCodeChanged(newText)
+}
+
+@Composable
+fun CodeCompletionPopup(
+    completions: List<Completion>,
+    selectedIndex: Int,
+    onSelect: (Completion) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        modifier = modifier.widthIn(max = 320.dp),
+    ) {
+        Column {
+            completions.take(5).forEachIndexed { index, completion ->
+                val isSelected = index == selectedIndex
+                CompletionItemRow(
+                    completion = completion,
+                    isSelected = isSelected,
+                    onClick = { onSelect(completion) },
+                )
+            }
+
+            // Tutor panel — shows hint for selected completion
+            completions.getOrNull(selectedIndex)?.let { selected ->
+                if (selected.tutorHint != null) {
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                        thickness = 0.5.dp,
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                            )
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            Icon(
+                                Icons.Outlined.School, null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Text(
+                                "How it works",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 10.sp,
+                                letterSpacing = 0.3.sp,
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            // Difficulty badge
+                            Text(
+                                selected.difficulty.name,
+                                style = TextStyle(
+                                    fontSize = 8.sp,
+                                    color = when (selected.difficulty) {
+                                        Difficulty.BEGINNER -> Color(0xFF4CAF50)
+                                        Difficulty.INTERMEDIATE -> Color(0xFFFF9800)
+                                        Difficulty.ADVANCED -> Color(0xFFE53935)
+                                    },
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(
+                                        when (selected.difficulty) {
+                                            Difficulty.BEGINNER ->
+                                                Color(0xFF4CAF50).copy(alpha = 0.12f)
+                                            Difficulty.INTERMEDIATE ->
+                                                Color(0xFFFF9800).copy(alpha = 0.12f)
+                                            Difficulty.ADVANCED ->
+                                                Color(0xFFE53935).copy(alpha = 0.12f)
+                                        }
+                                    )
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                            )
+                        }
+                        Text(
+                            selected.tutorHint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp,
                         )
+                        // Code example
+                        selected.tutorExample?.let { example ->
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    example,
+                                    style = TextStyle(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(
+                                            alpha = 0.65f),
+                                        lineHeight = 16.sp,
+                                    ),
+                                    modifier = Modifier.padding(8.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -173,8 +334,9 @@ fun SyntaxHighlightedEditor(
 }
 
 @Composable
-fun CompletionItem(
+fun CompletionItemRow(
     completion: Completion,
+    isSelected: Boolean,
     onClick: () -> Unit,
 ) {
     val typeColor = when (completion.type) {
@@ -195,6 +357,7 @@ fun CompletionItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -217,7 +380,8 @@ fun CompletionItem(
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

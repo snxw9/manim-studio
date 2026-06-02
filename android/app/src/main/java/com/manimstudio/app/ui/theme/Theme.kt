@@ -18,6 +18,7 @@ import com.manimstudio.app.data.models.FontOption
 @Composable
 fun ManimStudioTheme(
     themeSettings: ThemeSettings = ThemeSettings(),
+    fontOption: FontOption = FontOption.INTER,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -73,24 +74,9 @@ fun ManimStudioTheme(
         }
     }
 
-    val typography = if (themeSettings.fontOption == FontOption.SYSTEM) {
-        // Build typography using Default fonts
-        Typography(
-            displayLarge = ManimTypography.displayLarge.copy(fontFamily = FontFamily.Default),
-            headlineLarge = ManimTypography.headlineLarge.copy(fontFamily = FontFamily.Default),
-            headlineMedium = ManimTypography.headlineMedium.copy(fontFamily = FontFamily.Default),
-            titleLarge = ManimTypography.titleLarge.copy(fontFamily = FontFamily.Default),
-            titleMedium = ManimTypography.titleMedium.copy(fontFamily = FontFamily.Default),
-            titleSmall = ManimTypography.titleSmall.copy(fontFamily = FontFamily.Default),
-            bodyLarge = ManimTypography.bodyLarge.copy(fontFamily = FontFamily.Default),
-            bodyMedium = ManimTypography.bodyMedium.copy(fontFamily = FontFamily.Default),
-            bodySmall = ManimTypography.bodySmall.copy(fontFamily = FontFamily.Default),
-            labelLarge = ManimTypography.labelLarge, // keep monospace for code
-            labelMedium = ManimTypography.labelMedium.copy(fontFamily = FontFamily.Default),
-            labelSmall = ManimTypography.labelSmall.copy(fontFamily = FontFamily.Default),
-        )
-    } else {
-        ManimTypography
+    val typography = when (fontOption) {
+        FontOption.INTER -> ManimTypography
+        FontOption.SYSTEM -> ManimSystemTypography
     }
 
     MaterialTheme(colorScheme = colorScheme, typography = typography, content = content)

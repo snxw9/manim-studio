@@ -1,12 +1,15 @@
 package com.manimstudio.app.ui.components
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Error
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.manimstudio.app.data.models.ChatMessage
@@ -30,7 +34,7 @@ fun ChatMessageItem(
 ) {
     when (message.type) {
         MessageType.USER_PROMPT -> UserMessage(message.content, modifier)
-        MessageType.SYSTEM_STATUS -> SystemMessage(message.content, modifier)
+        MessageType.SYSTEM_STATUS -> SystemMessage(message, modifier)
         MessageType.VIDEO_RESULT -> VideoMessage(message, onExport, modifier)
         MessageType.ERROR -> ErrorMessage(message.content, onRetry, modifier)
         MessageType.CODE_PREVIEW -> CodePreviewMessage(message.content, modifier)
@@ -61,25 +65,43 @@ private fun UserMessage(content: String, modifier: Modifier) {
 }
 
 @Composable
-private fun SystemMessage(content: String, modifier: Modifier) {
+private fun SystemMessage(message: ChatMessage, modifier: Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(
-            imageVector = Icons.Outlined.AutoAwesome,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(Modifier.width(8.dp))
+        if (message.content.contains("Generat") ||
+            message.content.contains("Render")) {
+            val pulseTransition = rememberInfiniteTransition(label = "statusPulse")
+            val alpha by pulseTransition.animateFloat(
+                initialValue = 1f, targetValue = 0.3f,
+                animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
+                label = "sAlpha",
+            )
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .background(
+                        MaterialTheme.colorScheme.primary.copy(alpha = alpha),
+                        CircleShape,
+                    )
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Outlined.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
+            )
+        }
         Text(
-            text = content,
+            message.content,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-            fontStyle = FontStyle.Italic
+            fontStyle = FontStyle.Italic,
         )
     }
 }
@@ -93,25 +115,59 @@ private fun VideoMessage(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp)
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // Video player card
         message.videoFile?.let { file ->
-            VideoPlayerBubble(
-                videoFile = file,
-                onExport = { onExport(file) }
-            )
-            
-            Spacer(Modifier.height(8.dp))
-            Row(
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "${file.name} • ${message.renderTimeMs?.let { "${it/1000}s" } ?: "unknown"}",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.labelSmall
-                )
+                Column {
+                    VideoPlayerBubble(
+                        videoFile = file,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f),
+                        onExport = null,
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column {
+                            Text(
+                                file.nameWithoutExtension,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            message.renderTimeMs?.let { ms ->
+                                Text(
+                                    "Rendered in ${ms / 1000}s",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp,
+                                )
+                            }
+                        }
+                        IconButton(onClick = { onExport(file) }) {
+                            Icon(
+                                Icons.Outlined.Download, "Export",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
             }
         }
     }

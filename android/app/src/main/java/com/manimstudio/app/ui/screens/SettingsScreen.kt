@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.manimstudio.app.data.models.RenderQuality
 import com.manimstudio.app.data.models.FontOption
+import com.manimstudio.app.ui.components.animations.GlobalGradientBackground
 import com.manimstudio.app.viewmodel.SettingsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,18 +66,20 @@ fun SettingsScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = MaterialTheme.colorScheme.background,
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
                 ),
             )
         },
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(bottom = 32.dp),
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            GlobalGradientBackground(intensity = 0.35f, animate = true)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = PaddingValues(bottom = 32.dp),
+            ) {
             // Account section
             item { SettingsSectionHeader("Account") }
             item {
@@ -279,6 +282,7 @@ fun SettingsScreen(
             }
         }
     }
+}
 
     // Dialogs
     if (showQualityDialog) {

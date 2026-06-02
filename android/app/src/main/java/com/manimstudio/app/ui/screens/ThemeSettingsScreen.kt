@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.*
+import com.manimstudio.app.ui.components.animations.GlobalGradientBackground
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -54,10 +55,12 @@ fun ThemeSettingsScreen(
             )
         },
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            GlobalGradientBackground(intensity = 0.35f, animate = true)
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
+            ) {
             // Material You toggle
             item {
                 SettingsToggleRow(
@@ -149,6 +152,7 @@ fun ThemeSettingsScreen(
             }
         }
     }
+}
 }
 
 @Composable

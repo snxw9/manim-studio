@@ -32,7 +32,8 @@ fun ManimApp(settingsViewModel: SettingsViewModel) {
     val settings by settingsViewModel.settings.collectAsState()
 
     ManimStudioTheme(
-        themeSettings = settings.themeSettings
+        themeSettings = settings.themeSettings,
+        fontOption = settings.themeSettings.fontOption
     ) {
         AppNavigation(settingsViewModel = settingsViewModel)
     }
