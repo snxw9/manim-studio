@@ -1,8 +1,9 @@
 package com.manimstudio.app.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,15 +12,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-
-data class EngineOption(val name: String, val description: String, val icon: ImageVector)
+import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,109 +31,169 @@ fun EngineBottomSheet(
     onSelect: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    if (!visible) return
+
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    if (visible) {
-        ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface,
-            dragHandle = {
-                Box(
-                    modifier = Modifier
-                        .padding(vertical = 12.dp)
-                        .width(32.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
-                )
-            },
-        ) {
-            // Title row
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(top = 12.dp, bottom = 8.dp)
+                    .width(36.dp).height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
+            )
+        },
+        tonalElevation = 2.dp,
+    ) {
+        // Title
+        Text(
+            "Select engine",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 8.dp),
+        )
+
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+            thickness = 0.5.dp,
+        )
+
+        val engines = listOf(
+            EngineInfo(
+                name = "Local Engine",
+                description = "Private · renders on your device",
+                icon = Icons.Outlined.PhoneAndroid,
+                tint = Color(0xFF4CAF50), // green — offline/private
+                badge = "OFFLINE",
+            ),
+            EngineInfo(
+                name = "Groq · Llama 3.3",
+                description = "Fast · free tier available",
+                icon = Icons.Outlined.Bolt,
+                tint = Color(0xFF2196F3), // blue — fast
+                badge = "FREE",
+            ),
+            EngineInfo(
+                name = "Gemini 2.0 Flash",
+                description = "Advanced math & code generation",
+                icon = Icons.Outlined.AutoAwesome,
+                tint = Color(0xFF9C27B0), // purple — AI
+                badge = null,
+            ),
+            EngineInfo(
+                name = "OpenAI GPT-4o",
+                description = "Premium quality generation",
+                icon = Icons.Outlined.Stars,
+                tint = Color(0xFFFF9800), // orange — premium
+                badge = "API KEY",
+            ),
+        )
+
+        engines.forEach { engine ->
+            val isSelected = selected == engine.name
+            val bgColor by animateColorAsState(
+                targetValue = if (isSelected)
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+                else Color.Transparent,
+                animationSpec = tween(200),
+                label = "engineBg",
+            )
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 4.dp),
+                    .background(bgColor)
+                    .clickable { onSelect(engine.name); onDismiss() }
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Outlined.Close, "Close",
-                        tint = MaterialTheme.colorScheme.onSurface)
+                // Engine icon with colored background pill
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(engine.tint.copy(alpha = if (isSelected) 0.2f else 0.1f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        engine.icon, null,
+                        tint = engine.tint,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
-                Text(
-                    "Select engine",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Spacer(modifier = Modifier.size(48.dp))
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Engine options
-            val engines = listOf(
-                EngineOption("Local Engine", "Private · offline rendering",
-                    Icons.Outlined.PhoneAndroid),
-                EngineOption("Groq · Llama 3.3", "Fast · free tier",
-                    Icons.Outlined.Cloud),
-                EngineOption("Gemini 2.0 Flash", "Advanced math & code",
-                    Icons.Outlined.AutoAwesome),
-                EngineOption("OpenAI GPT-4o", "Premium generation",
-                    Icons.Outlined.Stars),
-            )
-
-            engines.forEach { engine ->
-                val isSelected = selected == engine.name
-                ListItem(
-                    headlineContent = {
+                // Text
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         Text(
                             engine.name,
                             style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                             color = if (isSelected) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurface,
-                            fontWeight = if (isSelected) FontWeight.Medium
-                                         else FontWeight.Normal,
                         )
-                    },
-                    supportingContent = {
-                        Text(
-                            engine.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isSelected)
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    },
-                    leadingContent = {
-                        Icon(engine.icon, null,
-                            tint = if (isSelected) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp))
-                    },
-                    trailingContent = {
-                        AnimatedVisibility(visible = isSelected, enter = fadeIn(), exit = fadeOut()) {
-                            Icon(Icons.Outlined.Check, null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp))
+                        // Badge pill
+                        engine.badge?.let { badge ->
+                            Text(
+                                badge,
+                                style = TextStyle(
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.5.sp,
+                                ),
+                                color = engine.tint,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(engine.tint.copy(alpha = 0.12f))
+                                    .padding(horizontal = 5.dp, vertical = 2.dp),
+                            )
                         }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            onSelect(engine.name)
-                            onDismiss()
-                        },
-                    colors = ListItemDefaults.colors(
-                        containerColor = if (isSelected)
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                        else Color.Transparent,
-                    ),
-                )
-            }
+                    }
+                    Text(
+                        engine.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
-            Spacer(modifier = Modifier.navigationBarsPadding().height(16.dp))
+                // Checkmark
+                AnimatedVisibility(
+                    visible = isSelected,
+                    enter = fadeIn(tween(150)) + scaleIn(
+                        initialScale = 0.6f,
+                        animationSpec = spring(Spring.DampingRatioMediumBouncy),
+                    ),
+                    exit = fadeOut(tween(100)) + scaleOut(targetScale = 0.6f),
+                ) {
+                    Icon(
+                        Icons.Outlined.Check, null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
         }
+
+        Spacer(Modifier.navigationBarsPadding().height(8.dp))
     }
 }
+
+data class EngineInfo(
+    val name: String,
+    val description: String,
+    val icon: ImageVector,
+    val tint: Color,
+    val badge: String?,
+)

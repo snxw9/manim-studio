@@ -15,6 +15,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
 import com.manimstudio.app.data.models.StudioPhase
 import com.manimstudio.app.ui.components.*
 import com.manimstudio.app.ui.components.animations.AmbientGlow
@@ -53,6 +56,14 @@ fun StudioScreen(
         }
     }
 
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage == 1) {
+            viewModel.collapseInput()
+        } else {
+            viewModel.expandInput()
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -75,7 +86,11 @@ fun StudioScreen(
                 .background(MaterialTheme.colorScheme.background),
         ) {
             // ── LAYER 1: full-screen gradient (behind everything) ──
-            AmbientGlow(modifier = Modifier.align(Alignment.BottomCenter))
+            AmbientGlow(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 0.dp) // sits at very bottom
+            )
             AnimatedVisibility(
                 visible = isRendering,
                 enter = fadeIn(tween(800)),
@@ -155,7 +170,6 @@ fun StudioScreen(
                 )
                 StudioTopBar(
                     onMenuClick = { scope.launch { drawerState.open() } },
-                    onNewChatClick = { viewModel.onNewChat() },
                     modifier = Modifier.statusBarsPadding(),
                 )
             }
@@ -173,22 +187,25 @@ fun StudioScreen(
             }
 
             // ── LAYER 5: Bottom input + chips (always on top) ──
+            val isEditorPage = pagerState.currentPage == 1
+            val inputExpanded = uiState.inputExpanded
+
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
+                    .imePadding()
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                // Render chips — only on editor page when idle
+                // Render chips — visible on editor page only
                 AnimatedVisibility(
-                    visible = pagerState.currentPage == 1 &&
-                              uiState.phase == StudioPhase.IDLE,
-                    enter = fadeIn(tween(200)) + slideInVertically(
+                    visible = isEditorPage && uiState.phase == StudioPhase.IDLE,
+                    enter = fadeIn() + slideInVertically(
                         animationSpec = spring(Spring.DampingRatioMediumBouncy)
                     ) { it },
-                    exit = fadeOut(tween(150)) + slideOutVertically { it },
+                    exit = fadeOut() + slideOutVertically { it },
                 ) {
                     CompactRenderChips(
                         quality = uiState.renderQuality,
@@ -198,17 +215,64 @@ fun StudioScreen(
                         onRender = viewModel::onRenderFromEditor,
                     )
                 }
-                
-                FloatingPromptInput(
-                    text = uiState.inputText,
-                    onTextChange = viewModel::onInputChanged,
-                    onSend = viewModel::onSendPrompt,
-                    onStop = viewModel::onStopRender,
-                    onTemplateClick = { viewModel.showTemplates() },
-                    isRendering = isRendering,
-                    selectedEngine = uiState.selectedEngine,
-                    onEngineClick = { viewModel.toggleEngineSelector() },
-                )
+
+                // Input — collapsed bubble on editor, full on home/preview
+                AnimatedContent(
+                    targetState = isEditorPage && !inputExpanded,
+                    transitionSpec = {
+                        fadeIn(tween(250)) + scaleIn(
+                            initialScale = if (targetState) 0.8f else 1.1f,
+                            animationSpec = spring(Spring.DampingRatioMediumBouncy),
+                        ) togetherWith fadeOut(tween(200)) + scaleOut(
+                            targetScale = if (targetState) 1.1f else 0.8f,
+                        )
+                    },
+                    label = "inputMorph",
+                ) { isCollapsed ->
+                    if (isCollapsed) {
+                        // Collapsed pill — just an edit icon bubble
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            Surface(
+                                onClick = { viewModel.expandInput() },
+                                shape = RoundedCornerShape(percent = 50),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                                shadowElevation = 4.dp,
+                                modifier = Modifier.height(44.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Edit, "Expand input",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Text(
+                                        "Describe...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        FloatingPromptInput(
+                            text = uiState.inputText,
+                            onTextChange = viewModel::onInputChanged,
+                            onSend = viewModel::onSendPrompt,
+                            onStop = viewModel::onStopRender,
+                            onTemplateClick = { viewModel.showTemplates() },
+                            isRendering = isRendering,
+                            selectedEngine = uiState.selectedEngine,
+                            onEngineClick = { viewModel.toggleEngineSelector() },
+                        )
+                    }
+                }
             }
 
             // ── LAYER 6: Bottom Sheets for Engine & Templates ──

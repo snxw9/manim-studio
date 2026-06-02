@@ -42,6 +42,7 @@ data class StudioUiState(
     val userName: String = "Abdulfatai",
     val showTemplatePicker: Boolean = false,
     val templates: List<Template> = emptyList(),
+    val inputExpanded: Boolean = true,
 ) {
     val renderQuality: RenderQuality get() = settings.renderQuality
 }
@@ -106,6 +107,14 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
 
     fun onEngineSelected(engine: String) {
         _uiState.update { it.copy(selectedEngine = engine, showEngineSelector = false) }
+    }
+
+    fun collapseInput() {
+        _uiState.update { it.copy(inputExpanded = false) }
+    }
+
+    fun expandInput() {
+        _uiState.update { it.copy(inputExpanded = true) }
     }
 
     fun onFormatChanged(format: String) {

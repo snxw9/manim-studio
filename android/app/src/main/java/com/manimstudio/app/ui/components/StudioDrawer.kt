@@ -46,14 +46,13 @@ fun StudioDrawer(
         modifier = Modifier.width(320.dp).fillMaxHeight(),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Header — large title + options icon
+            // Header — large title
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(start = 20.dp, end = 8.dp, top = 16.dp, bottom = 8.dp),
+                    .padding(start = 20.dp, top = 16.dp, bottom = 8.dp, end = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
                     "Manim Studio",
@@ -61,11 +60,6 @@ fun StudioDrawer(
                     color = MaterialTheme.colorScheme.onBackground,
                     fontWeight = FontWeight.Bold,
                 )
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Outlined.MoreVert, "Options",
-                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        modifier = Modifier.size(20.dp))
-                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))

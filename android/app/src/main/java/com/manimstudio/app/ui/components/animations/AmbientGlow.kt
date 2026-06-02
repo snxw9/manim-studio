@@ -14,35 +14,30 @@ import androidx.compose.material3.MaterialTheme
 
 @Composable
 fun AmbientGlow(modifier: Modifier = Modifier) {
-    val primary = MaterialTheme.colorScheme.primary
-    val transition = rememberInfiniteTransition(label = "ambientGlow")
+    val transition = rememberInfiniteTransition(label = "glow")
     val alpha by transition.animateFloat(
-        initialValue = 0.12f, targetValue = 0.22f,
+        initialValue = 0.10f, targetValue = 0.18f,
         animationSpec = infiniteRepeatable(
             tween(3500, easing = EaseInOutSine), RepeatMode.Reverse
-        ), label = "glowAlpha"
+        ), label = "glowAlpha",
     )
-    val spread by transition.animateFloat(
-        initialValue = 0.7f, targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            tween(4000, easing = EaseInOutSine), RepeatMode.Reverse
-        ), label = "glowSpread"
-    )
-
+    val primaryColor = MaterialTheme.colorScheme.primary
+    // Height 140dp max — stays below the input bar visually
     Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .height(260.dp) // tall enough to feel immersive
+            .height(140.dp)
     ) {
         drawRect(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    primary.copy(alpha = alpha),
-                    primary.copy(alpha = alpha * 0.3f),
+                    primaryColor.copy(alpha = alpha),
+                    primaryColor.copy(alpha = alpha * 0.3f),
                     Color.Transparent,
                 ),
+                // Anchored to bottom center, radius doesn't exceed canvas
                 center = Offset(size.width * 0.5f, size.height),
-                radius = size.width * spread,
+                radius = size.width * 0.65f,
             ),
             size = size,
         )

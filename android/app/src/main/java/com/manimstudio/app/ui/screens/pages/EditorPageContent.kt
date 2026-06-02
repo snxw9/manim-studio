@@ -3,6 +3,8 @@ package com.manimstudio.app.ui.screens.pages
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -43,6 +45,21 @@ fun EditorPageContent(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
+        // Subtle horizontal line grid — like a notebook/editor
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val lineHeight = 22.dp.toPx() // match text lineHeight
+            val lineColor = Color.White.copy(alpha = 0.025f)
+            var y = 96.dp.toPx() // start after the top bar fade area
+            while (y < size.height) {
+                drawLine(
+                    color = lineColor,
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = 0.5.dp.toPx(),
+                )
+                y += lineHeight
+            }
+        }
 
         // Code editor — scrollable, fills screen
         // Uses a Column inside a verticalScroll so content isn't collapsed
