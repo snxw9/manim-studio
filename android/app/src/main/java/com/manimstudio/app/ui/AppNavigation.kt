@@ -18,6 +18,8 @@ import com.manimstudio.app.ui.screens.ThemeSettingsScreen
 import com.manimstudio.app.ui.screens.TemplatesScreen
 import com.manimstudio.app.viewmodel.SettingsViewModel
 import com.manimstudio.app.viewmodel.StudioViewModel
+import com.manimstudio.app.engine.SetupViewModel
+import com.manimstudio.app.ui.setup.SetupScreen
 
 @Composable
 fun AppNavigation(settingsViewModel: SettingsViewModel) {
@@ -75,10 +77,26 @@ fun AppNavigation(settingsViewModel: SettingsViewModel) {
         }
 
         composable("settings") {
+            val setupViewModel: SetupViewModel = viewModel()
             SettingsScreen(
                 settingsViewModel = settingsViewModel,
+                setupViewModel = setupViewModel,
+                navController = navController,
                 onBack = { navController.popBackStack() },
                 onNavigateToTheme = { navController.navigate("theme_settings") }
+            )
+        }
+
+        composable("setup") {
+            val setupViewModel: SetupViewModel = viewModel()
+            val setupState by setupViewModel.state.collectAsState()
+            SetupScreen(
+                state = setupState,
+                viewModel = setupViewModel,
+                onStartSetup = { setupViewModel.startInstallation() },
+                onRetry = { setupViewModel.retrySetup() },
+                onTestRender = { setupViewModel.testRender { } },
+                onOpenSettings = { navController.navigate("settings") },
             )
         }
 

@@ -25,11 +25,16 @@ import com.manimstudio.app.data.models.RenderQuality
 import com.manimstudio.app.data.models.FontOption
 import com.manimstudio.app.ui.components.animations.GlobalGradientBackground
 import com.manimstudio.app.viewmodel.SettingsViewModel
+import androidx.navigation.NavController
+import com.manimstudio.app.engine.SetupViewModel
+import androidx.compose.ui.text.font.FontFamily
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     settingsViewModel: SettingsViewModel,
+    setupViewModel: SetupViewModel,
+    navController: NavController,
     onBack: () -> Unit,
     onNavigateToTheme: () -> Unit,
 ) {
@@ -250,19 +255,59 @@ fun SettingsScreen(
             item { SettingsSectionHeader("Engine") }
             item {
                 SettingsGroup {
+                    // Engine version
+                    val installedVersion = remember {
+                        setupViewModel.getInstalledVersion() ?: "Not installed"
+                    }
                     ListItem(
-                        headlineContent = { Text("Engine Status", color = MaterialTheme.colorScheme.onBackground) },
+                        headlineContent = {
+                            Text("Bootstrap Version", color = MaterialTheme.colorScheme.onSurface)
+                        },
                         trailingContent = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(8.dp)
-                                    .background(Color(0xFF4CAF50), CircleShape))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Ready", color = Color(0xFF4CAF50),
-                                    style = MaterialTheme.typography.bodyMedium)
-                            }
+                            Text(
+                                installedVersion,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontFamily = FontFamily.Monospace,
+                            )
                         },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
+
+                    // Update available banner
+                    val setupState by setupViewModel.state.collectAsState()
+                    setupState.updateAvailable?.let { update ->
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp))
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    "Update available — v${update.version}",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            },
+                            supportingContent = {
+                                Text(
+                                    update.changelog,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
+                            trailingContent = {
+                                TextButton(onClick = {
+                                    setupViewModel.retrySetup()
+                                    navController.navigate("setup")
+                                }) {
+                                    Text("Update", color = MaterialTheme.colorScheme.primary)
+                                }
+                            },
+                            colors = ListItemDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
+                            ),
+                        )
+                    }
+
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant,
                         modifier = Modifier.padding(horizontal = 16.dp))
                     ListItem(

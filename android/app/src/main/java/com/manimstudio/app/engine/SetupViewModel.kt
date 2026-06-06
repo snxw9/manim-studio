@@ -13,14 +13,19 @@ data class SetupState(
     val progress: Int = 0,
     val stage: String = "Checking...",
     val detail: String = "",
+    val bytesDownloaded: Long = 0L,
+    val bytesTotal: Long = 0L,
     val error: String? = null,
+    val updateAvailable: BootstrapManifest? = null,
+    val showWifiDialog: Boolean = false,
 ) {
     enum class Phase {
-        CHECKING,      // App just launched, checking if installed
-        NEEDS_SETUP,   // Not installed, show setup screen
-        INSTALLING,    // Download + install in progress
-        READY,         // All good, show main app
-        ERROR,         // Something went wrong
+        CHECKING,       // first launch check
+        NEEDS_SETUP,    // not installed, show setup screen
+        WIFI_REQUIRED,  // on mobile data, need confirmation
+        INSTALLING,     // download + extract in progress
+        READY,          // all good
+        ERROR,          // installation failed
     }
 }
 
@@ -36,43 +41,44 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
         checkInstallation()
     }
 
+    // ── Setup flow ────────────────────────────────────────────────────────────
+
     private fun checkInstallation() {
         viewModelScope.launch {
-            val markerFile = File(engine.filesDir, ".installed")
-            if (markerFile.exists() && engine.isInstalled) {
-                _state.value = SetupState(phase = SetupState.Phase.READY,
-                    progress = 100, stage = "Ready")
+            val installer = makeInstaller()
+            if (installer.isInstalled()) {
+                _state.value = SetupState(
+                    phase = SetupState.Phase.READY,
+                    progress = 100,
+                    stage = "Ready",
+                )
+                // Background update check — non-blocking
+                checkForUpdate()
             } else {
-                _state.value = SetupState(phase = SetupState.Phase.NEEDS_SETUP,
-                    stage = "Setup required")
+                _state.value = SetupState(phase = SetupState.Phase.NEEDS_SETUP)
             }
         }
     }
 
-    fun startInstallation() {
+    fun startInstallation(allowMobileData: Boolean = false) {
         viewModelScope.launch {
-            _state.value = SetupState(phase = SetupState.Phase.INSTALLING,
-                stage = "Starting setup...")
-
-            val installer = BootstrapInstaller(
-                context = getApplication(),
-                engine = engine,
-                onProgress = { progress ->
-                    _state.value = SetupState(
-                        phase = SetupState.Phase.INSTALLING,
-                        progress = progress.percent,
-                        stage = progress.stage,
-                        detail = progress.detail,
-                    )
-                }
+            _state.value = SetupState(
+                phase = SetupState.Phase.INSTALLING,
+                stage = "Starting...",
             )
 
-            when (val result = installer.install()) {
+            val installer = makeInstaller()
+            when (val result = installer.install(allowMobileData)) {
                 is InstallResult.Success -> {
                     _state.value = SetupState(
                         phase = SetupState.Phase.READY,
                         progress = 100,
                         stage = "Manim Studio is ready",
+                    )
+                }
+                is InstallResult.WifiRequired -> {
+                    _state.value = SetupState(
+                        phase = SetupState.Phase.WIFI_REQUIRED,
                     )
                 }
                 is InstallResult.Error -> {
@@ -86,21 +92,44 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun confirmMobileDataInstall() {
+        startInstallation(allowMobileData = true)
+    }
+
+    fun retrySetup() {
+        engine.usrDir.deleteRecursively()
+        File(engine.filesDir, ".installed").delete()
+        _state.value = SetupState(phase = SetupState.Phase.NEEDS_SETUP)
+    }
+
+    // ── Update flow ───────────────────────────────────────────────────────────
+
+    private fun checkForUpdate() {
+        viewModelScope.launch {
+            val installer = makeInstaller()
+            val update = installer.checkForUpdate()
+            if (update != null) {
+                _state.value = _state.value.copy(updateAvailable = update)
+            }
+        }
+    }
+
+    fun getInstalledVersion(): String? = makeInstaller().getInstalledVersion()
+
+    // ── Test render ───────────────────────────────────────────────────────────
+
     fun testRender(onResult: (RenderResult) -> Unit) {
         viewModelScope.launch {
             val testCode = """
 from manim import *
 
-class TestScene(Scene):
+class WelcomeTest(Scene):
     def construct(self):
-        circle = Circle(radius=1.5, color=BLUE, fill_opacity=0.4)
-        text = Text("Manim Studio", font_size=36)
-        text.next_to(circle, DOWN, buff=0.4)
-        self.play(Create(circle), Write(text))
+        text = Text("Manim Studio", font_size=48, color=WHITE)
+        self.play(Write(text))
         self.wait(1)
-        self.play(FadeOut(circle), FadeOut(text))
+        self.play(FadeOut(text))
 """.trimIndent()
-
             val result = renderer.render(testCode, "480p") { line ->
                 _state.value = _state.value.copy(detail = line.takeLast(60))
             }
@@ -108,10 +137,20 @@ class TestScene(Scene):
         }
     }
 
-    fun retrySetup() {
-        // Clean up failed installation
-        engine.usrDir.deleteRecursively()
-        File(engine.filesDir, ".installed").delete()
-        startInstallation()
-    }
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private fun makeInstaller() = BootstrapInstaller(
+        context = getApplication(),
+        engine = engine,
+        onProgress = { progress ->
+            _state.value = SetupState(
+                phase = SetupState.Phase.INSTALLING,
+                progress = progress.percent,
+                stage = progress.stage,
+                detail = progress.detail,
+                bytesDownloaded = progress.bytesDownloaded,
+                bytesTotal = progress.bytesTotal,
+            )
+        },
+    )
 }

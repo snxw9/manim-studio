@@ -1,26 +1,55 @@
 package com.manimstudio.app.engine
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "BootstrapInstaller"
+private const val MANIFEST_URL =
+    "https://raw.githubusercontent.com/snxw9/manim-studio-bootstrap/main/bootstrap-manifest.json"
+private const val RELEASE_MANIFEST_URL =
+    "https://github.com/snxw9/manim-studio-bootstrap/releases/latest/download/bootstrap-manifest.json"
+
+@Serializable
+data class BootstrapManifest(
+    val version: String,
+    val manim_version: String,
+    val python_version: String,
+    val arch: String,
+    val min_app_version: Int,
+    val release_url: String,
+    val bootstrap_url: String,
+    val bootstrap_size_bytes: Long,
+    val bootstrap_sha256: String,
+    val proot_url: String,
+    val proot_sha256: String,
+    val changelog: String,
+    val built_at: String = "",
+)
 
 data class InstallProgress(
     val stage: String,
     val percent: Int,
     val detail: String = "",
+    val bytesDownloaded: Long = 0L,
+    val bytesTotal: Long = 0L,
 )
 
 sealed class InstallResult {
     object Success : InstallResult()
     data class Error(val message: String, val cause: Throwable? = null) : InstallResult()
+    object WifiRequired : InstallResult()
 }
 
 class BootstrapInstaller(
@@ -30,192 +59,286 @@ class BootstrapInstaller(
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(300, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.SECONDS) // no timeout for large downloads
         .build()
 
-    // Alpine Linux minimal rootfs for arm64
-    private val ALPINE_ROOTFS_URL =
-        "https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/aarch64/" +
-        "alpine-minirootfs-3.19.1-aarch64.tar.gz"
+    private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun install(): InstallResult = withContext(Dispatchers.IO) {
-        try {
-            engine.ensureDirs()
+    // ── Public API ────────────────────────────────────────────────────────────
 
-            // Stage 1: Download Alpine rootfs with real-time UI tracking
-            onProgress(InstallProgress("Downloading Linux environment", 0, "Connecting..."))
-            val rootfsTar = downloadFile(
-                url = ALPINE_ROOTFS_URL, 
-                filename = "alpine-rootfs.tar.gz",
-                baseProgress = 0,
-                progressRange = 30,
-                stageName = "Downloading Linux environment"
-            ) ?: return@withContext InstallResult.Error("Failed to download Alpine rootfs")
+    suspend fun install(allowMobileData: Boolean = false): InstallResult =
+        withContext(Dispatchers.IO) {
+            try {
+                engine.ensureDirs()
 
-            // Stage 2: Extract rootfs
-            onProgress(InstallProgress("Setting up Linux environment", 30, "Extracting files..."))
-            extractTarGz(rootfsTar, engine.usrDir)
-            rootfsTar.delete()
-            Log.i(TAG, "Alpine rootfs extracted to ${engine.usrDir}")
+                // Check connectivity
+                val connectivityResult = checkConnectivity(allowMobileData)
+                if (connectivityResult != null) return@withContext connectivityResult
 
-            // Stage 3: Configure Alpine package manager & FIX DNS
-            onProgress(InstallProgress("Configuring package manager", 35, "Setting up network and apk..."))
-            setupAlpineRepos()
+                // Fetch manifest
+                onProgress(InstallProgress("Checking latest version", 2))
+                val manifest = fetchManifest()
+                    ?: return@withContext InstallResult.Error(
+                        "Could not fetch bootstrap manifest. Check your internet connection."
+                    )
 
-            // Stage 4: Install System Packages + Hidden Pango Dependencies
-            onProgress(InstallProgress("Installing system packages", 45, "Downloading system libraries..."))
-            val (pyExit, pyOut) = engine.exec(
-                listOf("/sbin/apk", "add", "--no-cache",
-                    "python3", "py3-pip",
-                    "py3-setuptools", "py3-wheel",
-                    "py3-cairo", "py3-cairo-dev",
-                    "pango", "pango-dev",
-                    "harfbuzz-dev", "freetype-dev", "glib-dev", // Pango's hidden C-dependencies
-                    "cairo", "cairo-dev",
-                    "ffmpeg",
-                    "pkgconfig", "gcc", "g++", 
-                    "python3-dev", "musl-dev",
-                    "libffi-dev", "openssl-dev",
-                    "font-dejavu"
-                ),
-                onOutput = { line ->
-                    if (line.contains("Installing") || line.contains("Fetching")) {
-                        // Keep UI progress bar moving during massive apk download
-                    }
-                }
-            )
-            if (pyExit != 0) {
-                // Pass full string straight to the UI
-                return@withContext InstallResult.Error("APK Error:\n$pyOut") 
-            }
+                Log.i(TAG, "Installing bootstrap v${manifest.version}")
 
-            // Stage 5: Pre-install build tools via pip globally
-            onProgress(InstallProgress("Preparing Python builder", 60, "Installing Cython..."))
-            val (toolsExit, toolsOut) = engine.exec(
-                listOf("/usr/bin/pip3", "install", "--no-cache-dir", "--break-system-packages",
-                    "Cython", "numpy<2.0.0"
+                // Download and extract rootfs
+                val archiveFile = File(engine.filesDir, "bootstrap.tar.gz")
+                val downloadResult = downloadWithProgress(
+                    url = manifest.bootstrap_url,
+                    dest = archiveFile,
+                    expectedSize = manifest.bootstrap_size_bytes,
+                    expectedSha256 = manifest.bootstrap_sha256,
+                    stageLabel = "Downloading Manim bootstrap",
+                    startPercent = 5,
+                    endPercent = 75,
                 )
-            )
-            if (toolsExit != 0) {
-                return@withContext InstallResult.Error("Cython Error:\n$toolsOut")
+                if (downloadResult != null) return@withContext downloadResult
+
+                // Extract
+                onProgress(InstallProgress("Extracting files", 76,
+                    "This may take a few minutes..."))
+                val extractResult = extractTarGz(archiveFile, engine.usrDir)
+                if (extractResult != null) return@withContext extractResult
+                archiveFile.delete()
+
+                // Inject DNS
+                onProgress(InstallProgress("Configuring network", 90))
+                injectDns()
+
+                // Verify
+                onProgress(InstallProgress("Verifying installation", 94,
+                    "Testing Manim..."))
+                val verifyResult = verify()
+                if (verifyResult != null) return@withContext verifyResult
+
+                // Write version marker
+                val marker = File(engine.filesDir, ".installed")
+                marker.writeText(manifest.version)
+
+                onProgress(InstallProgress("Complete", 100,
+                    "Manim ${manifest.manim_version} ready"))
+
+                Log.i(TAG, "Bootstrap installation complete: v${manifest.version}")
+                InstallResult.Success
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Installation failed", e)
+                InstallResult.Error(e.message ?: "Unknown error during installation", e)
             }
-
-            // Stage 6: Compile manimpango and install manim
-            onProgress(InstallProgress("Installing Manim", 70, "Compiling manimpango..."))
-            val (pipExit, pipOut) = engine.exec(
-                listOf("/usr/bin/pip3", "install", "--no-cache-dir", "--break-system-packages",
-                    "--no-build-isolation", // Force pip to use the Cython we just installed
-                    "manimpango",
-                    "manim"
-                )
-            )
-            if (pipExit != 0) {
-                return@withContext InstallResult.Error("Pip Manim Error:\n$pipOut")
-            }
-
-            // Stage 7: Verify installation
-            onProgress(InstallProgress("Verifying installation", 90, "Testing Manim..."))
-            val (verifyExit, verifyOut) = engine.exec(
-                listOf("/usr/bin/python3", "-c", "import manim; print(manim.__version__)")
-            )
-            if (verifyExit != 0) {
-                return@withContext InstallResult.Error("Manim verification failed: $verifyOut")
-            }
-
-            // Stage 8: Mark installation complete
-            File(engine.filesDir, ".installed").writeText(verifyOut.trim())
-            onProgress(InstallProgress("Complete", 100, "Manim ${verifyOut.trim()} ready"))
-
-            InstallResult.Success
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Installation failed", e)
-            InstallResult.Error(e.message ?: "Unknown error", e)
         }
-    }
 
-    private suspend fun downloadFile(
-        url: String, 
-        filename: String,
-        baseProgress: Int,
-        progressRange: Int,
-        stageName: String
-    ): File? = withContext(Dispatchers.IO) {
+    /**
+     * Check if a newer bootstrap version is available.
+     * Returns the new manifest if an update is available, null otherwise.
+     * Does not block — intended for background checks.
+     */
+    suspend fun checkForUpdate(): BootstrapManifest? = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder().url(url).build()
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) return@withContext null
-
-            val body = response.body ?: return@withContext null
-            val totalBytes = body.contentLength()
-            val file = File(engine.filesDir, filename)
-
-            body.byteStream().use { input ->
-                FileOutputStream(file).use { output ->
-                    val buffer = ByteArray(8 * 1024)
-                    var bytesCopied = 0L
-                    var bytes = input.read(buffer)
-                    var lastPercent = -1
-
-                    while (bytes >= 0) {
-                        output.write(buffer, 0, bytes)
-                        bytesCopied += bytes
-                        
-                        if (totalBytes > 0) {
-                            val downloadedPct = ((bytesCopied.toDouble() / totalBytes.toDouble()) * 100).toInt()
-                            // Only update UI every 2% to avoid overwhelming the Compose thread
-                            if (downloadedPct != lastPercent && downloadedPct % 2 == 0) {
-                                lastPercent = downloadedPct
-                                val overallProgress = baseProgress + (downloadedPct * progressRange / 100)
-                                val mbDownloaded = String.format("%.1f", bytesCopied.toDouble() / (1024 * 1024))
-                                val mbTotal = String.format("%.1f", totalBytes.toDouble() / (1024 * 1024))
-                                
-                                onProgress(InstallProgress(
-                                    stage = stageName, 
-                                    percent = overallProgress, 
-                                    detail = "$mbDownloaded MB / $mbTotal MB"
-                                ))
-                            }
-                        }
-                        bytes = input.read(buffer)
-                    }
-                }
-            }
-            file
+            val installedVersion = getInstalledVersion() ?: return@withContext null
+            val manifest = fetchManifest() ?: return@withContext null
+            if (isNewerVersion(manifest.version, installedVersion)) manifest else null
         } catch (e: Exception) {
-            Log.e(TAG, "Download failed: $url", e)
+            Log.w(TAG, "Update check failed", e)
             null
         }
     }
 
-    private fun extractTarGz(tarGz: File, destDir: File) {
-        val process = ProcessBuilder(
-            "tar", "xzf", tarGz.absolutePath,
-            "-C", destDir.absolutePath,
-            "--no-same-owner",
-        ).start()
-        process.waitFor()
+    fun getInstalledVersion(): String? {
+        val marker = File(engine.filesDir, ".installed")
+        return if (marker.exists()) marker.readText().trim() else null
     }
 
-    private suspend fun setupAlpineRepos() {
-        // FIX: Android doesn't have a standard /etc/resolv.conf, meaning PRoot has no DNS.
-        // We MUST inject one so `apk` knows how to connect to the internet.
-        val resolvFile = File(engine.usrDir, "etc/resolv.conf")
-        resolvFile.parentFile?.mkdirs()
-        resolvFile.writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
+    fun isInstalled(): Boolean {
+        val marker = File(engine.filesDir, ".installed")
+        return marker.exists() && engine.pythonBin.exists()
+    }
 
-        val reposFile = File(engine.usrDir, "etc/apk/repositories")
-        reposFile.parentFile?.mkdirs()
-        reposFile.writeText(
-            "https://dl-cdn.alpinelinux.org/alpine/v3.19/main\n" +
-            "https://dl-cdn.alpinelinux.org/alpine/v3.19/community\n"
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    private fun checkConnectivity(allowMobileData: Boolean): InstallResult? {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE)
+            as ConnectivityManager
+        val network = cm.activeNetwork ?: return InstallResult.Error(
+            "No internet connection. Connect to Wi-Fi or mobile data and try again."
         )
-        
-        // We also need to check the exit code. If the internet drops here, 
-        // we want it to crash loudly, not fail silently.
-        val (exitCode, output) = engine.exec(listOf("/sbin/apk", "update"))
-        if (exitCode != 0) {
-            throw Exception("Failed to update Alpine repositories. Check internet connection.\nOutput: $output")
+        val caps = cm.getNetworkCapabilities(network) ?: return InstallResult.Error(
+            "Could not determine network type."
+        )
+
+        val isWifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+        val isMobile = caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+        val isEthernet = caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+
+        if (!isWifi && !isMobile && !isEthernet) {
+            return InstallResult.Error("No usable network connection found.")
+        }
+
+        if (!isWifi && !isEthernet && !allowMobileData) {
+            return InstallResult.WifiRequired
+        }
+
+        return null // all good
+    }
+
+    private fun fetchManifest(): BootstrapManifest? {
+        // Try release manifest first, fall back to repo manifest
+        for (url in listOf(RELEASE_MANIFEST_URL, MANIFEST_URL)) {
+            try {
+                val request = Request.Builder().url(url).build()
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val body = response.body?.string() ?: continue
+                    return json.decodeFromString<BootstrapManifest>(body)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to fetch manifest from $url: ${e.message}")
+            }
+        }
+        return null
+    }
+
+    private suspend fun downloadWithProgress(
+        url: String,
+        dest: File,
+        expectedSize: Long,
+        expectedSha256: String,
+        stageLabel: String,
+        startPercent: Int,
+        endPercent: Int,
+    ): InstallResult? {
+        val range = endPercent - startPercent
+
+        try {
+            val request = Request.Builder().url(url).build()
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                return InstallResult.Error(
+                    "Download failed: HTTP ${response.code} for $url"
+                )
+            }
+
+            val body = response.body
+                ?: return InstallResult.Error("Empty response body from $url")
+
+            val contentLength = if (expectedSize > 0) expectedSize
+                                 else body.contentLength()
+
+            val digest = MessageDigest.getInstance("SHA-256")
+            var downloaded = 0L
+
+            FileOutputStream(dest).use { out ->
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(65_536) // 64KB chunks
+                    var read: Int
+                    while (input.read(buffer).also { read = it } != -1) {
+                        out.write(buffer, 0, read)
+                        digest.update(buffer, 0, read)
+                        downloaded += read
+
+                        val progress = if (contentLength > 0) {
+                            startPercent + (downloaded.toFloat() / contentLength * range).toInt()
+                        } else startPercent + range / 2
+
+                        val mb = downloaded / (1024 * 1024)
+                        val totalMb = if (contentLength > 0) contentLength / (1024 * 1024) else 0
+
+                        onProgress(InstallProgress(
+                            stage = stageLabel,
+                            percent = progress.coerceIn(startPercent, endPercent),
+                            detail = if (totalMb > 0) "${mb}MB / ${totalMb}MB" else "${mb}MB",
+                            bytesDownloaded = downloaded,
+                            bytesTotal = contentLength,
+                        ))
+                    }
+                }
+            }
+
+            // Verify checksum
+            val actualSha256 = digest.digest().joinToString("") { "%02x".format(it) }
+            if (actualSha256 != expectedSha256) {
+                dest.delete()
+                return InstallResult.Error(
+                    "Download corrupted — checksum mismatch.\n" +
+                    "Expected: $expectedSha256\n" +
+                    "Got:      $actualSha256\n" +
+                    "Please try again."
+                )
+            }
+
+            Log.i(TAG, "Downloaded ${dest.name}: ${downloaded / (1024 * 1024)}MB, checksum OK")
+            return null // success
+
+        } catch (e: Exception) {
+            dest.delete()
+            return InstallResult.Error("Download error: ${e.message}", e)
+        }
+    }
+
+    private fun extractTarGz(archive: File, destDir: File): InstallResult? {
+        return try {
+            destDir.mkdirs()
+            val process = ProcessBuilder(
+                "tar", "xzf", archive.absolutePath,
+                "-C", destDir.absolutePath,
+                "--no-same-owner",
+                "--overwrite",
+            ).redirectErrorStream(true).start()
+
+            val output = process.inputStream.bufferedReader().readText()
+            val exit = process.waitFor()
+
+            if (exit != 0) {
+                InstallResult.Error("Extraction failed (exit $exit):\n$output")
+            } else {
+                Log.i(TAG, "Extracted to ${destDir.absolutePath}")
+                null
+            }
+        } catch (e: Exception) {
+            InstallResult.Error("Extraction error: ${e.message}", e)
+        }
+    }
+
+    private fun injectDns() {
+        try {
+            val resolv = File(engine.usrDir, "etc/resolv.conf")
+            resolv.parentFile?.mkdirs()
+            resolv.writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
+            Log.i(TAG, "DNS injected")
+        } catch (e: Exception) {
+            Log.w(TAG, "DNS injection failed (non-fatal): ${e.message}")
+        }
+    }
+
+    private suspend fun verify(): InstallResult? {
+        val (exitCode, output) = engine.exec(
+            listOf("/usr/bin/python3", "-c",
+                "import manim; import cairo; print(manim.__version__)")
+        )
+        return if (exitCode != 0) {
+            InstallResult.Error("Manim verification failed:\n$output")
+        } else {
+            Log.i(TAG, "Verification OK: $output")
+            null
+        }
+    }
+
+    private fun isNewerVersion(remote: String, local: String): Boolean {
+        return try {
+            val r = remote.split(".").map { it.toInt() }
+            val l = local.split(".").map { it.toInt() }
+            val maxLen = maxOf(r.size, l.size)
+            for (i in 0 until maxLen) {
+                val rv = r.getOrElse(i) { 0 }
+                val lv = l.getOrElse(i) { 0 }
+                if (rv > lv) return true
+                if (rv < lv) return false
+            }
+            false
+        } catch (e: Exception) {
+            false
         }
     }
 }

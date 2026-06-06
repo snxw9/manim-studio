@@ -17,14 +17,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import com.manimstudio.app.engine.SetupState
+import com.manimstudio.app.engine.SetupViewModel
 
 @Composable
 fun SetupScreen(
     state: SetupState,
+    viewModel: SetupViewModel,
     onStartSetup: () -> Unit,
     onRetry: () -> Unit,
     onTestRender: () -> Unit,
@@ -74,6 +79,20 @@ fun SetupScreen(
                 SetupState.Phase.NEEDS_SETUP -> {
                     NeedsSetupContent(
                         onStart = onStartSetup,
+                        orangeAccent = orangeAccent,
+                        textPrimary = textPrimary,
+                        textMuted = textMuted,
+                    )
+                }
+
+                SetupState.Phase.WIFI_REQUIRED -> {
+                    WifiRequiredContent(
+                        onWifiOnly = {
+                            viewModel.retrySetup()
+                        },
+                        onContinueAnyway = {
+                            viewModel.confirmMobileDataInstall()
+                        },
                         orangeAccent = orangeAccent,
                         textPrimary = textPrimary,
                         textMuted = textMuted,
@@ -193,7 +212,6 @@ private fun SetupInfoCard(accent: Color, textMuted: Color) {
         }
     }
 }
-
 @Composable
 private fun InstallingContent(
     state: SetupState,
@@ -203,32 +221,41 @@ private fun InstallingContent(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Text(text = state.stage, fontSize = 16.sp, color = textPrimary,
+        Text(state.stage, fontSize = 16.sp, color = textPrimary,
             fontFamily = FontFamily.Monospace)
 
         LinearProgressIndicator(
             progress = { state.progress / 100f },
-            modifier = Modifier.fillMaxWidth().height(4.dp),
+            modifier = Modifier.fillMaxWidth().height(3.dp)
+                .clip(RoundedCornerShape(2.dp)),
             color = orangeAccent,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            trackColor = Color(0xFF2A2A2A),
         )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
+            // Show MB progress when downloading
+            val detailText = if (state.bytesTotal > 0) {
+                val dlMb = state.bytesDownloaded / (1024 * 1024)
+                val totalMb = state.bytesTotal / (1024 * 1024)
+                "${dlMb}MB / ${totalMb}MB"
+            } else {
+                state.detail.takeLast(45)
+            }
             Text(
-                text = state.detail.takeLast(50),
+                detailText,
                 fontSize = 11.sp,
                 color = textMuted,
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.weight(1f),
             )
             Text(
-                text = "${state.progress}%",
+                "${state.progress}%",
                 fontSize = 11.sp,
                 color = textMuted,
                 fontFamily = FontFamily.Monospace,
@@ -236,11 +263,21 @@ private fun InstallingContent(
         }
 
         Text(
-            text = "Keep the app open. This may take 5–10 minutes on first launch.",
-            fontSize = 12.sp,
+            "Keep the app open — this only happens once.",
+            fontSize = 11.sp,
             color = textMuted,
             textAlign = TextAlign.Center,
         )
+
+        // Estimated time hint
+        if (state.progress in 5..74) {
+            Text(
+                "Large download — Wi-Fi recommended for best speed.",
+                fontSize = 10.sp,
+                color = Color(0xFF555555),
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -320,5 +357,98 @@ private fun ErrorContent(
         ) {
             Text("Try Again", color = MaterialTheme.colorScheme.onPrimary, fontFamily = FontFamily.Monospace)
         }
+    }
+}
+
+@Composable
+private fun WifiRequiredContent(
+    onWifiOnly: () -> Unit,
+    onContinueAnyway: () -> Unit,
+    orangeAccent: Color,
+    textPrimary: Color,
+    textMuted: Color,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+    ) {
+        Icon(
+            Icons.Outlined.Wifi,
+            contentDescription = null,
+            tint = orangeAccent,
+            modifier = Modifier.size(48.dp),
+        )
+
+        Text(
+            "Wi-Fi recommended",
+            fontSize = 20.sp,
+            color = textPrimary,
+            fontFamily = FontFamily.Monospace,
+        )
+
+        Text(
+            "The bootstrap archive is approximately 400MB. " +
+            "Downloading on mobile data may incur charges from your carrier.",
+            fontSize = 13.sp,
+            color = textMuted,
+            textAlign = TextAlign.Center,
+            lineHeight = 19.sp,
+        )
+
+        // Size breakdown
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF1A1A1A))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            SizeRow("Python 3.11 + Manim", "~80MB", textMuted)
+            SizeRow("Cairo + Pango libraries", "~30MB", textMuted)
+            SizeRow("FFmpeg + fonts", "~50MB", textMuted)
+            SizeRow("LaTeX (for equations)", "~240MB", textMuted)
+            HorizontalDivider(color = Color(0xFF2A2A2A))
+            SizeRow("Total download", "~400MB", textPrimary)
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Primary — wait for Wi-Fi
+        Button(
+            onClick = onWifiOnly,
+            colors = ButtonDefaults.buttonColors(containerColor = orangeAccent),
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(8.dp),
+        ) {
+            Text("Wait for Wi-Fi", color = Color(0xFF0D0D0D),
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
+        }
+
+        // Secondary — continue on mobile data
+        OutlinedButton(
+            onClick = onContinueAnyway,
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.dp, Color(0xFF3A3A3A)),
+        ) {
+            Text("Continue anyway (mobile data)",
+                color = textMuted, fontSize = 13.sp,
+                fontFamily = FontFamily.Monospace)
+        }
+    }
+}
+
+@Composable
+private fun SizeRow(label: String, size: String, color: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, fontSize = 12.sp, color = color,
+            fontFamily = FontFamily.Monospace)
+        Text(size, fontSize = 12.sp, color = color,
+            fontFamily = FontFamily.Monospace)
     }
 }
