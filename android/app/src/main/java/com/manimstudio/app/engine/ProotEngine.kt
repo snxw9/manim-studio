@@ -14,7 +14,7 @@ private const val TAG = "ProotEngine"
  * 
  * Architecture:
  *   /data/data/com.manimstudio.app/files/
- *     usr/          ← Alpine Linux rootfs unpacked here
+ *     usr/          ← Debian Linux rootfs unpacked here
  *       bin/python3 ← Python 3.11
  *       lib/        ← Cairo, Pango, etc
  *     home/manim/   ← Manim working directory

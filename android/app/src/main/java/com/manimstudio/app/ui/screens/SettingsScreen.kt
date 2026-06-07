@@ -316,7 +316,7 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.bodyLarge)
                         },
                         supportingContent = {
-                            Text("Re-downloads and reinstalls Alpine Linux + Manim",
+                            Text("Re-downloads and reinstalls Debian Linux + Manim",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall)
                         },
@@ -563,7 +563,7 @@ fun SettingsScreen(
             title = { Text("Reinstall Engine?", color = MaterialTheme.colorScheme.error) },
             text = {
                 Text(
-                    "This will delete the Alpine Linux environment and " +
+                    "This will delete the Debian Linux environment and " +
                     "re-download everything (~300MB). This takes 5-10 minutes.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
