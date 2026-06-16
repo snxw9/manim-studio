@@ -1,13 +1,8 @@
 package com.manimstudio.app.engine
 
-import android.content.Context
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.UUID
-
-private const val TAG = "ManimRenderer"
 
 data class RenderResult(
     val success: Boolean,
@@ -17,57 +12,57 @@ data class RenderResult(
 )
 
 class ManimRenderer(
-    private val context: Context,
     private val engine: ProotEngine,
 ) {
     suspend fun render(
         code: String,
-        quality: String = "480p",
-        onProgress: ((String) -> Unit)? = null,
+        quality: String = "720p",
+        onProgress: (String) -> Unit = {},
     ): RenderResult = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
 
-        // Extract class name from code
-        val classNameMatch = Regex("""class\s+(\w+)\s*\(""").find(code)
-        if (classNameMatch == null) {
-            return@withContext RenderResult(
+        // Validate code before sending to proot
+        val classMatch =
+            Regex("""class\s+(\w+)\s*\(""").find(code) ?: return@withContext RenderResult(
                 success = false,
-                errorMessage = "No Scene class found in code"
+                errorMessage = "No Scene class found in code. " +
+                        "Every Manim animation needs a class like:\n" +
+                        "class MyScene(Scene):",
             )
-        }
-        val className = classNameMatch.groupValues[1]
-        Log.d(TAG, "Rendering class: $className at $quality")
-
-        // Write scene file
-        val sceneId = UUID.randomUUID().toString().take(8)
-        val sceneFile = File(engine.homeDir, "scene_${sceneId}.py")
-        sceneFile.writeText(code, Charsets.UTF_8)
+        val className = classMatch.groupValues[1]
 
         val qualityFlag = when (quality) {
             "480p" -> "-ql"
             "720p" -> "-qm"
             "1080p" -> "-qh"
-            else -> "-ql"
+            else -> "-qm"
         }
 
-        // Build manim command
-        val cmd = listOf(
-            "/usr/bin/python3", "-m", "manim",
-            qualityFlag,
-            "--fps", "30",
-            "--format", "mp4",
-            "--media_dir", "/renders",
-            "--disable_caching",
-            "--progress_bar", "none",
-            sceneFile.name, // <-- FIX: Use just the filename instead of the absolute path
-            className,
-        )
-
+        // Write scene file to the shared home directory
+        val sceneId = java.util.UUID.randomUUID().toString().take(8)
+        val sceneFile = File(engine.homeDir, "scene_${sceneId}.py")
         try {
+            // Strip control characters before writing
+            val cleanCode = code.replace(Regex("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]"), "")
+            sceneFile.writeText(cleanCode, Charsets.UTF_8)
+
+            val cmd = listOf(
+                "/usr/bin/python3", "-m", "manim",
+                qualityFlag,
+                "--fps", "30",
+                "--format", "mp4",
+                "--media_dir", "/renders",
+                "--disable_caching",
+                "--progress_bar", "none",
+                "/home/manim/${sceneFile.name}",
+                className,
+            )
+
             val (exitCode, output) = engine.exec(
-                cmd,
-                workDir = engine.homeDir.absolutePath,
-                onOutput = onProgress,
+                command = cmd,
+                onOutput = { line ->
+                    onProgress(line)
+                },
             )
 
             sceneFile.delete()
@@ -75,22 +70,22 @@ class ManimRenderer(
             if (exitCode != 0) {
                 return@withContext RenderResult(
                     success = false,
-                    errorMessage = "Manim error:\n${output.takeLast(2000)}",
+                    errorMessage = buildFriendlyError(output),
                     renderTimeMs = System.currentTimeMillis() - startTime,
                 )
             }
 
-            // Find output video
+            // Find the output file
             val videoFile = findOutputVideo(className)
                 ?: return@withContext RenderResult(
                     success = false,
-                    errorMessage = "Render completed but no video file found.\n$output",
+                    errorMessage = "Render completed but no video file was produced.\n$output",
                     renderTimeMs = System.currentTimeMillis() - startTime,
                 )
 
-            // Copy to a clean named location
-            val outputName = "${className}_${quality}.mp4"
-            val finalFile = File(engine.rendersDir, outputName)
+            // Copy to a friendly name
+            val friendlyName = "${className}_${quality}.mp4"
+            val finalFile = File(engine.rendersDir, friendlyName)
             videoFile.copyTo(finalFile, overwrite = true)
 
             RenderResult(
@@ -106,6 +101,33 @@ class ManimRenderer(
                 errorMessage = "Unexpected error: ${e.message}",
                 renderTimeMs = System.currentTimeMillis() - startTime,
             )
+        }
+    }
+
+    private fun buildFriendlyError(output: String): String {
+        return when {
+            output.contains("ModuleNotFoundError") || output.contains("ImportError") ->
+                "A Python package is missing from the engine. " +
+                "Try reinstalling the engine from Settings."
+            output.contains("latex failed") || output.contains("LaTeX Error") ->
+                "LaTeX failed to render the math equation. " +
+                "Check your MathTex syntax — use raw strings: MathTex(r\"\\alpha\")"
+            output.contains("AttributeError") && output.contains("has no attribute") -> {
+                val match = Regex("""'(\w+)' object has no attribute '(\w+)'""").find(output)
+                if (match != null) {
+                    "The method '${match.groupValues[2]}' doesn't exist on " +
+                    "'${match.groupValues[1]}'. Check the Manim documentation."
+                } else "A Manim object method was used incorrectly.\n$output"
+            }
+            output.contains("NameError") -> {
+                val match = Regex("""name '(\w+)' is not defined""").find(output)
+                "Unknown name '${match?.groupValues?.get(1) ?: "unknown"}'. " +
+                "This Manim class or function doesn't exist in this version."
+            }
+            output.contains("SyntaxError") ->
+                "Python syntax error in the code. Check for missing colons, " +
+                "brackets, or indentation problems."
+            else -> "Manim error:\n${output.takeLast(2000)}"
         }
     }
 

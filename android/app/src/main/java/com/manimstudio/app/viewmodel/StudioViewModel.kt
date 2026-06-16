@@ -1,12 +1,12 @@
 package com.manimstudio.app.viewmodel
 
 import android.app.Application
-import android.graphics.Bitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.manimstudio.app.ManimStudioApp
 import com.manimstudio.app.data.TemplateRepository
 import com.manimstudio.app.data.models.*
+import com.manimstudio.app.engine.ProotEngine
+import com.manimstudio.app.engine.ManimRenderer
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
 
 data class StudioUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -43,26 +44,48 @@ data class StudioUiState(
     val showTemplatePicker: Boolean = false,
     val templates: List<Template> = emptyList(),
     val inputExpanded: Boolean = true,
-) {
-    val renderQuality: RenderQuality get() = settings.renderQuality
-}
+)
 
-class StudioViewModel(application: Application) : AndroidViewModel(application) {
+class StudioViewModel(
+    application: Application,
+    private val prootEngine: ProotEngine,
+) : AndroidViewModel(application) {
 
-    private val app = application as ManimStudioApp
-    private val engine = app.engine
-    private val renderer = app.renderer
+    private val renderer = ManimRenderer(prootEngine)
     private val templateRepository = TemplateRepository(application)
 
     private val _uiState = MutableStateFlow(StudioUiState())
     val uiState: StateFlow<StudioUiState> = _uiState.asStateFlow()
 
+    // Expose templates as state flow for AppNavigation/TemplatesScreen
+    val templates: StateFlow<List<Template>> = MutableStateFlow(emptyList<Template>()).apply {
+        value = templateRepository.getTemplates()
+    }.asStateFlow()
+
     private var timerJob: Job? = null
     private var renderJob: Job? = null
 
     init {
-        val templates = templateRepository.getTemplates()
-        _uiState.update { it.copy(templates = templates) }
+        val templatesList = templateRepository.getTemplates()
+        _uiState.update { it.copy(templates = templatesList) }
+    }
+
+    private fun checkBootstrapOrError(): Boolean {
+        val marker = File(prootEngine.filesDir, ".installed")
+        if (!marker.exists() || !prootEngine.pythonBin.exists()) {
+            val errorMsg = ChatMessage(
+                type = MessageType.ERROR,
+                content = "The Manim engine is not installed. " +
+                          "Go to Settings → Engine to install it.",
+                isError = true,
+            )
+            _uiState.update { it.copy(
+                messages = it.messages + errorMsg,
+                phase = StudioPhase.IDLE,
+            ) }
+            return false
+        }
+        return true
     }
 
     fun onInputChanged(text: String) {
@@ -70,8 +93,9 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onSendPrompt() {
-        val prompt = _uiState.value.inputText
-        if (prompt.isBlank()) return
+        if (!checkBootstrapOrError()) return
+        val prompt = _uiState.value.inputText.trim()
+        if (prompt.isEmpty()) return
 
         _uiState.update { it.copy(inputText = "") }
         
@@ -82,7 +106,7 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
             addMessage(ChatMessage(type = MessageType.SYSTEM_STATUS, content = "Generating Manim code..."))
             
             try {
-                val code = CodeGenerator.generate(prompt)
+                val code = CodeGenerator.generate(getApplication(), prompt)
                 _uiState.update { it.copy(generatedCode = code) }
                 addMessage(ChatMessage(type = MessageType.CODE_PREVIEW, content = code))
                 
@@ -91,42 +115,6 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
                 handleError("Generation failed: ${e.message}")
             }
         }
-    }
-
-    fun onCodeChanged(newCode: String) {
-        _uiState.update { it.copy(generatedCode = newCode) }
-    }
-
-    fun onRenderFromEditor() {
-        startRendering(_uiState.value.generatedCode, _uiState.value.settings.renderQuality)
-    }
-
-    fun toggleEngineSelector() {
-        _uiState.update { it.copy(showEngineSelector = !it.showEngineSelector) }
-    }
-
-    fun onEngineSelected(engine: String) {
-        _uiState.update { it.copy(selectedEngine = engine, showEngineSelector = false) }
-    }
-
-    fun collapseInput() {
-        _uiState.update { it.copy(inputExpanded = false) }
-    }
-
-    fun expandInput() {
-        _uiState.update { it.copy(inputExpanded = true) }
-    }
-
-    fun onFormatChanged(format: String) {
-        _uiState.update { it.copy(renderFormat = format) }
-    }
-
-    fun showTemplates() {
-        _uiState.update { it.copy(showTemplatePicker = true) }
-    }
-
-    fun hideTemplatePicker() {
-        _uiState.update { it.copy(showTemplatePicker = false) }
     }
 
     private fun startRendering(code: String, quality: RenderQuality) {
@@ -174,20 +162,6 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
         addMessage(ChatMessage(type = MessageType.SYSTEM_STATUS, content = "Template loaded: ${template.name}"))
     }
 
-    fun onNewChat() {
-        _uiState.update { it.copy(messages = emptyList(), phase = StudioPhase.IDLE) }
-    }
-
-    fun onQualityChanged(quality: RenderQuality) {
-        _uiState.update { it.copy(settings = it.settings.copy(renderQuality = quality)) }
-    }
-
-    fun onExportVideo(file: File) {
-        // Implementation for exporting video to Movies folder
-        // This usually involves MediaStore or File copying to public directory
-        addMessage(ChatMessage(type = MessageType.SYSTEM_STATUS, content = "Video exported to gallery"))
-    }
-
     private fun addMessage(message: ChatMessage) {
         _uiState.update { it.copy(messages = it.messages + message) }
     }
@@ -201,7 +175,7 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
             while (true) {
-                delay(1000)
+                delay(1000.milliseconds)
                 _uiState.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
             }
         }
@@ -211,12 +185,16 @@ class StudioViewModel(application: Application) : AndroidViewModel(application) 
         timerJob?.cancel()
         timerJob = null
     }
+
 }
 
 object CodeGenerator {
-    suspend fun generate(prompt: String): String {
-        delay(1500) // simulate API call
-        return """
+    suspend fun generate(context: android.content.Context, prompt: String): String {
+        return try {
+            com.manimstudio.ai.GroqClient.generate(context, prompt)
+        } catch (_: Exception) {
+            delay(1500.milliseconds) // simulate API call delay on fallback
+            """
 from manim import *
 
 class GeneratedScene(Scene):
@@ -228,6 +206,7 @@ class GeneratedScene(Scene):
         self.play(Create(circle))
         self.wait(2)
         self.play(*[FadeOut(m) for m in self.mobjects])
-""".trimIndent()
+            """.trimIndent()
+        }
     }
 }

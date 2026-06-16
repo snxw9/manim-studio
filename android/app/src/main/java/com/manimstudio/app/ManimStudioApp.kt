@@ -11,6 +11,6 @@ class ManimStudioApp : Application() {
     override fun onCreate() {
         super.onCreate()
         engine = ProotEngine(this)
-        renderer = ManimRenderer(this, engine)
+        renderer = ManimRenderer(engine)
     }
 }

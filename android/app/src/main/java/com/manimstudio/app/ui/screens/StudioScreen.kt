@@ -1,296 +1,157 @@
 package com.manimstudio.app.ui.screens
 
-import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Edit
-import com.manimstudio.app.data.models.StudioPhase
-import com.manimstudio.app.ui.components.*
-import com.manimstudio.app.ui.components.animations.AmbientGlow
-import com.manimstudio.app.ui.components.animations.RenderingGradientBackground
-import com.manimstudio.app.ui.components.animations.GlobalGradientBackground
-import com.manimstudio.app.ui.screens.pages.EditorPageContent
-import com.manimstudio.app.ui.screens.pages.HomePageContent
-import com.manimstudio.app.ui.screens.pages.VideoPageContent
-import com.manimstudio.app.viewmodel.StudioViewModel
 import kotlinx.coroutines.launch
-import kotlin.math.abs
+import com.manimstudio.app.ui.components.StudioTopAppBar
+import com.manimstudio.app.ui.components.FloatingPromptInput
+import com.manimstudio.app.viewmodel.StudioViewModel
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudioScreen(
     viewModel: StudioViewModel,
-    onNavigateToSettings: () -> Unit,
-    onNavigateToTemplates: () -> Unit,
+    onNavigateToSettings: () -> Unit = {},
+    onNavigateToGallery: () -> Unit = {},
+    onNavigateToTemplates: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    var showBottomSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     
-    val isRendering = uiState.phase == StudioPhase.RENDERING ||
-                      uiState.phase == StudioPhase.GENERATING
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
 
-    // Auto-switch to editor when generating starts
-    LaunchedEffect(uiState.phase) {
-        when (uiState.phase) {
-            StudioPhase.GENERATING, StudioPhase.RENDERING -> {
-                pagerState.animateScrollToPage(1)
-            }
-            StudioPhase.DONE -> {
-                pagerState.animateScrollToPage(1)
-            }
-            else -> {}
-        }
-    }
-
-    LaunchedEffect(pagerState.currentPage) {
-        if (pagerState.currentPage == 1) {
-            viewModel.collapseInput()
-        } else {
-            viewModel.expandInput()
-        }
-    }
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val glowRadius by infiniteTransition.animateFloat(
+        initialValue = 800f, targetValue = 1600f,
+        animationSpec = infiniteRepeatable(animation = tween(durationMillis = 3500, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse),
+        label = "glowRadius"
+    )
 
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            StudioDrawer(
-                onNewChat = { viewModel.onNewChat(); scope.launch { drawerState.close() } },
-                onNavigateToSettings = onNavigateToSettings,
-                onGalleryClick = { /* navigate to gallery */ },
-                onTemplatesClick = onNavigateToTemplates,
-                recentChats = uiState.recentChats,
-                onSelectChat = { /* load chat */ scope.launch { drawerState.close() } },
-                userName = uiState.userName,
-                onClose = { scope.launch { drawerState.close() } },
-            )
-        },
-        scrimColor = Color.Black.copy(alpha = 0.6f),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-        ) {
-            // ── LAYER 1: full-screen gradient (behind everything) ──
-            GlobalGradientBackground()
-            AnimatedVisibility(
-                visible = isRendering,
-                enter = fadeIn(tween(800)),
-                exit = fadeOut(tween(600)),
+            ModalDrawerSheet(
+                drawerContainerColor = Color.Black,
+                drawerShape = RoundedCornerShape(topEnd = 0.dp, bottomEnd = 0.dp),
+                modifier = Modifier.width(320.dp)
             ) {
-                RenderingGradientBackground()
-            }
-
-            // ── LAYER 2: HorizontalPager (full screen including under status bar) ──
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = 1,
-            ) { page ->
-                val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                val absOffset = abs(pageOffset).coerceIn(0f, 1f)
-                val scale = 0.92f + (1f - 0.92f) * (1f - absOffset)
-                val alpha = 0.5f + (1f - 0.5f) * (1f - absOffset)
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                            this.alpha = alpha
-                        }
-                ) {
-                    when (page) {
-                        0 -> HomePageContent(
-                            userName = uiState.userName,
-                            suggestions = uiState.suggestions,
-                            onSuggestionClick = { suggestion ->
-                                viewModel.onInputChanged(suggestion.prompt)
-                                viewModel.onSendPrompt()
-                            },
-                            messages = uiState.messages,
-                            onRefresh = viewModel::onNewChat,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        1 -> EditorPageContent(
-                            code = uiState.generatedCode,
-                            onCodeChanged = viewModel::onCodeChanged,
-                            phase = uiState.phase,
-                            renderProgress = uiState.renderProgress,
-                            elapsedSeconds = uiState.elapsedSeconds,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        2 -> VideoPageContent(
-                            videoFile = uiState.lastVideoFile,
-                            onExport = viewModel::onExportVideo,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                }
-            }
-
-            // ── LAYER 3: Top bar OVERLAYS content with fade gradient behind it ──
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopStart),
-            ) {
-                // Fade gradient so content behind top bar is legible
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.background,
-                                    MaterialTheme.colorScheme.background.copy(alpha = 0.95f),
-                                    Color.Transparent,
-                                )
-                            )
-                        )
-                )
-                StudioTopBar(
-                    onMenuClick = { scope.launch { drawerState.open() } },
-                    modifier = Modifier.statusBarsPadding(),
+                SidebarContent(
+                    onNavigateToSettings = { scope.launch { drawerState.close() }; onNavigateToSettings() },
+                    onNavigateToGallery = { scope.launch { drawerState.close() }; onNavigateToGallery() },
+                    onNavigateToTemplates = { scope.launch { drawerState.close() }; onNavigateToTemplates() }
                 )
             }
-
-            // ── LAYER 4: Page tab dots (below top bar) ──
-            AnimatedVisibility(
-                visible = pagerState.currentPage > 0 || pagerState.currentPageOffsetFraction != 0f,
-                enter = fadeIn(), 
-                exit = fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 80.dp),
-            ) {
-                PagerTabRow(pagerState = pagerState, phase = uiState.phase)
-            }
-
-            // ── LAYER 5: Bottom input + chips (always on top) ──
-            val isEditorPage = pagerState.currentPage == 1
-            val inputExpanded = uiState.inputExpanded
-
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .imePadding()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                // Render chips — visible on editor page only
-                AnimatedVisibility(
-                    visible = isEditorPage && uiState.phase == StudioPhase.IDLE,
-                    enter = fadeIn() + slideInVertically(
-                        animationSpec = spring(Spring.DampingRatioMediumBouncy)
-                    ) { it },
-                    exit = fadeOut() + slideOutVertically { it },
-                ) {
-                    CompactRenderChips(
-                        quality = uiState.renderQuality,
-                        format = uiState.renderFormat,
-                        onQualityChange = viewModel::onQualityChanged,
-                        onFormatChange = viewModel::onFormatChanged,
-                        onRender = viewModel::onRenderFromEditor,
-                    )
-                }
-
-                // Input — collapsed bubble on editor, full on home/preview
-                AnimatedContent(
-                    targetState = isEditorPage && !inputExpanded,
-                    transitionSpec = {
-                        fadeIn(tween(250)) + scaleIn(
-                            initialScale = if (targetState) 0.8f else 1.1f,
-                            animationSpec = spring(Spring.DampingRatioMediumBouncy),
-                        ) togetherWith fadeOut(tween(200)) + scaleOut(
-                            targetScale = if (targetState) 1.1f else 0.8f,
-                        )
-                    },
-                    label = "inputMorph",
-                ) { isCollapsed ->
-                    if (isCollapsed) {
-                        // Collapsed pill — just an edit icon bubble
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                        ) {
-                            Surface(
-                                onClick = { viewModel.expandInput() },
-                                shape = RoundedCornerShape(percent = 50),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
-                                shadowElevation = 4.dp,
-                                modifier = Modifier.height(44.dp),
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Edit, "Expand input",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                    Text(
-                                        "Describe...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        FloatingPromptInput(
-                            text = uiState.inputText,
-                            onTextChange = viewModel::onInputChanged,
-                            onSend = viewModel::onSendPrompt,
-                            onStop = viewModel::onStopRender,
-                            onTemplateClick = { viewModel.showTemplates() },
-                            isRendering = isRendering,
-                            selectedEngine = uiState.selectedEngine,
-                            onEngineClick = { viewModel.toggleEngineSelector() },
-                        )
-                    }
-                }
-            }
-
-            // ── LAYER 6: Bottom Sheets for Engine & Templates ──
-            EngineBottomSheet(
-                visible = uiState.showEngineSelector,
-                selected = uiState.selectedEngine,
-                onSelect = viewModel::onEngineSelected,
-                onDismiss = viewModel::toggleEngineSelector,
-            )
-
-            TemplatePickerSheet(
-                visible = uiState.showTemplatePicker,
-                templates = uiState.templates,
-                onSelectTemplate = { template ->
-                    viewModel.onTemplateSelected(template.id)
-                    scope.launch { pagerState.animateScrollToPage(1) }
-                },
-                onDismiss = { viewModel.hideTemplatePicker() },
-            )
         }
+    ) {
+        Scaffold(
+            topBar = { StudioTopAppBar(onMenuClick = { scope.launch { drawerState.open() } }) },
+            bottomBar = { 
+                FloatingPromptInput(
+                    text = uiState.inputText,
+                    phase = uiState.phase,
+                    onTextChanged = { viewModel.onInputChanged(it) },
+                    onSend = { viewModel.onSendPrompt() },
+                    onStop = { viewModel.onStopRender() },
+                    onPlusClick = { showBottomSheet = true }
+                ) 
+            },
+            containerColor = Color.Black
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier.fillMaxSize()
+                    .background(Brush.radialGradient(colors = listOf(Color(0xFF3E1E04), Color.Black), radius = glowRadius, center = Offset(x = Float.POSITIVE_INFINITY / 2, y = Float.POSITIVE_INFINITY)))
+                    .padding(innerPadding)
+            ) {
+                Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = Color(0xFFFF8C00), modifier = Modifier.size(48.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Hi ${uiState.userName}, what's on your mind?", style = MaterialTheme.typography.headlineMedium, color = Color.White, textAlign = TextAlign.Center)
+                }
+            }
+        }
+    }
+
+    if (showBottomSheet) {
+        ModalBottomSheet(onDismissRequest = { showBottomSheet = false }, sheetState = sheetState, containerColor = Color.Black) {
+            Column(modifier = Modifier.fillMaxWidth().padding(24.dp).height(200.dp)) {
+                Text("Templates & Assets", color = Color.White, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+    }
+}
+
+@Composable
+fun SidebarContent(
+    onNavigateToSettings: () -> Unit,
+    onNavigateToGallery: () -> Unit,
+    onNavigateToTemplates: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Manim Studio", color = Color.White, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 24.dp, start = 12.dp))
+        
+        SidebarItem(Icons.Rounded.Edit, "New chat") {}
+        SidebarItem(Icons.Rounded.Search, "Search chats") {}
+        SidebarItem(Icons.Rounded.VideoLibrary, "Gallery", onClick = onNavigateToGallery)
+        SidebarItem(Icons.Rounded.GridView, "Templates", onClick = onNavigateToTemplates)
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        Text("Recent", color = Color(0xFFAAAAAA), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+        
+        SidebarRecentItem("No-code manim animation buil...")
+        SidebarRecentItem("Naruto Fandom Character Criti...")
+        SidebarRecentItem("Multi-platform audio processin...")
+        SidebarRecentItem("GUI for Manim animations")
+        
+        Spacer(modifier = Modifier.weight(1f))
+        
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { onNavigateToSettings() }.padding(12.dp)
+        ) {
+            Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(Color(0xFFFF8C00)), contentAlignment = Alignment.Center) {
+                Text("A", color = Color.Black, fontWeight = FontWeight.Bold)
+            }
+            Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                Text("Abdulfatai", color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("PRO", color = Color(0xFFAAAAAA), style = MaterialTheme.typography.labelSmall)
+            }
+            Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = Color(0xFFAAAAAA))
+        }
+    }
+}
+
+@Composable
+fun SidebarItem(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, onClick: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).clickable { onClick() }.padding(horizontal = 12.dp, vertical = 12.dp)) {
+        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(text, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+@Composable
+fun SidebarRecentItem(text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(50)).clickable {}.padding(horizontal = 12.dp, vertical = 12.dp)) {
+        Text(text, color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

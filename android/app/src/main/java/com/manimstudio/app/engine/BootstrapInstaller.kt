@@ -151,11 +151,6 @@ class BootstrapInstaller(
         return if (marker.exists()) marker.readText().trim() else null
     }
 
-    fun isInstalled(): Boolean {
-        val marker = File(engine.filesDir, ".installed")
-        return marker.exists() && engine.pythonBin.exists()
-    }
-
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private fun checkConnectivity(allowMobileData: Boolean): InstallResult? {
@@ -190,7 +185,7 @@ class BootstrapInstaller(
                 val request = Request.Builder().url(url).build()
                 val response = client.newCall(request).execute()
                 if (response.isSuccessful) {
-                    val body = response.body?.string() ?: continue
+                    val body = response.body.string()
                     return json.decodeFromString<BootstrapManifest>(body)
                 }
             } catch (e: Exception) {
@@ -221,7 +216,6 @@ class BootstrapInstaller(
             }
 
             val body = response.body
-                ?: return InstallResult.Error("Empty response body from $url")
 
             val contentLength = if (expectedSize > 0) expectedSize
                                  else body.contentLength()
@@ -229,29 +223,34 @@ class BootstrapInstaller(
             val digest = MessageDigest.getInstance("SHA-256")
             var downloaded = 0L
 
-            FileOutputStream(dest).use { out ->
-                body.byteStream().use { input ->
-                    val buffer = ByteArray(65_536) // 64KB chunks
-                    var read: Int
-                    while (input.read(buffer).also { read = it } != -1) {
-                        out.write(buffer, 0, read)
-                        digest.update(buffer, 0, read)
-                        downloaded += read
+            withContext(Dispatchers.IO) {
+                FileOutputStream(dest).use { out ->
+                    body.byteStream().use { input ->
+                        val buffer = ByteArray(65_536) // 64KB chunks
+                        var read: Int
+                        while (input.read(buffer).also { read = it } != -1) {
+                            out.write(buffer, 0, read)
+                            digest.update(buffer, 0, read)
+                            downloaded += read
 
-                        val progress = if (contentLength > 0) {
-                            startPercent + (downloaded.toFloat() / contentLength * range).toInt()
-                        } else startPercent + range / 2
+                            val progress = if (contentLength > 0) {
+                                startPercent + (downloaded.toFloat() / contentLength * range).toInt()
+                            } else startPercent + range / 2
 
-                        val mb = downloaded / (1024 * 1024)
-                        val totalMb = if (contentLength > 0) contentLength / (1024 * 1024) else 0
+                            val mb = downloaded / (1024 * 1024)
+                            val totalMb =
+                                if (contentLength > 0) contentLength / (1024 * 1024) else 0
 
-                        onProgress(InstallProgress(
-                            stage = stageLabel,
-                            percent = progress.coerceIn(startPercent, endPercent),
-                            detail = if (totalMb > 0) "${mb}MB / ${totalMb}MB" else "${mb}MB",
-                            bytesDownloaded = downloaded,
-                            bytesTotal = contentLength,
-                        ))
+                            onProgress(
+                                InstallProgress(
+                                    stage = stageLabel,
+                                    percent = progress.coerceIn(startPercent, endPercent),
+                                    detail = if (totalMb > 0) "${mb}MB / ${totalMb}MB" else "${mb}MB",
+                                    bytesDownloaded = downloaded,
+                                    bytesTotal = contentLength,
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -287,17 +286,42 @@ class BootstrapInstaller(
                 "--overwrite",
             ).redirectErrorStream(true).start()
 
+            // Drain output to prevent blocking
             val output = process.inputStream.bufferedReader().readText()
             val exit = process.waitFor()
 
-            if (exit != 0) {
-                InstallResult.Error("Extraction failed (exit $exit):\n$output")
-            } else {
-                Log.i(TAG, "Extracted to ${destDir.absolutePath}")
-                null
+            // Do NOT fail based on tar's exit code.
+            // Android's toybox tar is strict about absolute symlinks and hard links
+            // that exist in Linux rootfs archives but are not needed by Manim.
+            // Instead, verify only the files Manim actually requires.
+            Log.d(TAG, "tar exited $exit. Validating essential files...")
+
+            val essential = mapOf(
+                "python3" to "usr/bin/python3",
+                "pip3"    to "usr/bin/pip3",
+                "ffmpeg"  to "usr/bin/ffmpeg",
+                "latex"   to "usr/bin/latex",
+                "dvisvgm" to "usr/bin/dvisvgm",
+            )
+
+            val missing = essential.filterValues { rel ->
+                !File(destDir, rel).exists()
             }
+
+            if (missing.isNotEmpty()) {
+                return InstallResult.Error(
+                    "Extraction incomplete — these files are missing: " +
+                    "${missing.keys.joinToString(", ")}\n\n" +
+                    "Last tar output:\n${output.takeLast(600)}"
+                )
+            }
+
+            Log.i(TAG, "Extraction validated. All essential files present. " +
+                       "(tar exit=$exit, warnings above are non-fatal)")
+            null // success
+
         } catch (e: Exception) {
-            InstallResult.Error("Extraction error: ${e.message}", e)
+            InstallResult.Error("Extraction exception: ${e.message}", e)
         }
     }
 
@@ -337,7 +361,7 @@ class BootstrapInstaller(
                 if (rv < lv) return false
             }
             false
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }

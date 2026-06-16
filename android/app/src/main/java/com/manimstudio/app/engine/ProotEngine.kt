@@ -5,22 +5,11 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.InputStream
 
 private const val TAG = "ProotEngine"
 
 /**
  * Manages the proot Linux environment and Manim execution.
- * 
- * Architecture:
- *   /data/data/com.manimstudio.app/files/
- *     usr/          ← Debian Linux rootfs unpacked here
- *       bin/python3 ← Python 3.11
- *       lib/        ← Cairo, Pango, etc
- *     home/manim/   ← Manim working directory
- *     renders/      ← Output videos saved here
- *   /data/app/.../lib/
- *     libproot.so   ← PRoot binary (bundled)
  */
 class ProotEngine(private val context: Context) {
 
@@ -28,11 +17,9 @@ class ProotEngine(private val context: Context) {
     val usrDir: File = File(filesDir, "usr")
     val homeDir: File = File(filesDir, "home/manim")
     val rendersDir: File = File(filesDir, "renders")
+    val tmpDir: File = File(filesDir, "tmp")
     val prootBin: File = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
-    val pythonBin: File = File(filesDir, "usr/bin/python3")
-
-    val isInstalled: Boolean
-        get() = prootBin.exists() && pythonBin.exists()
+    val pythonBin: File = File(usrDir, "usr/bin/python3")
 
     /**
      * Run a command inside the proot Linux environment.
@@ -40,12 +27,11 @@ class ProotEngine(private val context: Context) {
      */
     suspend fun exec(
         command: List<String>,
-        workDir: String = homeDir.absolutePath,
         env: Map<String, String> = emptyMap(),
         onOutput: ((String) -> Unit)? = null,
     ): Pair<Int, String> = withContext(Dispatchers.IO) {
 
-        val prootCmd = buildProotCommand(command, workDir)
+        val prootCmd = buildProotCommand(command)
 
         Log.d(TAG, "exec: ${prootCmd.joinToString(" ")}")
 
@@ -72,43 +58,38 @@ class ProotEngine(private val context: Context) {
         Pair(exitCode, output.toString())
     }
 
-    private fun buildProotCommand(
-        command: List<String>,
-        workDir: String,
-    ): List<String> {
+    private fun buildProotCommand(command: List<String>): List<String> {
         return listOf(
             prootBin.absolutePath,
             "--kill-on-exit",
             "--link2symlink",
-            "-0",                          // fake root
-            "-r", usrDir.absolutePath,     // rootfs
+            "-0",
+            "-r", usrDir.absolutePath,
             "-b", "/dev",
             "-b", "/proc",
             "-b", "/sys",
+            "-b", "${filesDir.absolutePath}/tmp:/tmp",
             "-b", "${rendersDir.absolutePath}:/renders",
-            "-b", "${usrDir.absolutePath}/tmp:/tmp",
-            "-b", "${homeDir.absolutePath}:${homeDir.absolutePath}", // <-- NEW: Make the home folder visible to Linux!
-            "-w", workDir,
+            "-w", "/home/manim",
         ) + command
     }
 
     private fun buildEnvironment(extra: Map<String, String>): Map<String, String> {
         val nativeLibsDir = context.applicationInfo.nativeLibraryDir
-        
         return mapOf(
-            "HOME" to homeDir.absolutePath,
-            "PATH" to "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin",
+            "HOME" to "/home/manim",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
             "TERM" to "xterm-256color",
-            "LANG" to "en_US.UTF-8",
-            "PREFIX" to usrDir.absolutePath,
-            "TMPDIR" to "/tmp",                               // <-- Tell Python to use /tmp
-            "PROOT_TMP_DIR" to "${usrDir.absolutePath}/tmp",  // <-- Tell PRoot where to put its engine temp files
+            "LANG" to "C.UTF-8",
+            "LC_ALL" to "C.UTF-8",
+            "TMPDIR" to "/tmp",
+            "DEBIAN_FRONTEND" to "noninteractive",
             "PROOT_LOADER" to "$nativeLibsDir/libproot-loader.so"
         ) + extra
     }
 
     fun ensureDirs() {
-        listOf(usrDir, homeDir, rendersDir,
-               File(usrDir, "tmp")).forEach { it.mkdirs() }
+        listOf(usrDir, homeDir, rendersDir, tmpDir,
+               File(filesDir, "tmp")).forEach { it.mkdirs() }
     }
 }
