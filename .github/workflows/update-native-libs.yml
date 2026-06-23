@@ -1,0 +1,99 @@
+name: Update Native Libraries
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: sudo apt-get install -y patchelf zstd
+
+      - name: Download and extract proot from Termux
+        run: |
+          echo "Fetching Termux package index..."
+          wget -q \
+            "https://packages.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz" \
+            -O packages.gz
+
+          PROOT_PATH=$(zcat packages.gz | \
+            awk '/^Package: proot$/{found=1} found && /^Filename:/{print $2; exit}')
+          echo "proot package: $PROOT_PATH"
+
+          wget -q "https://packages.termux.dev/apt/termux-main/${PROOT_PATH}" -O proot.deb
+
+          mkdir proot_extract && cd proot_extract
+          ar x ../proot.deb
+          if [ -f data.tar.xz ]; then
+            tar xf data.tar.xz
+          elif [ -f data.tar.zst ]; then
+            zstd -d data.tar.zst -o data.tar && tar xf data.tar
+          fi
+          PROOT_BIN=$(find . -type f -name "proot" | head -1)
+          echo "Found proot binary: $PROOT_BIN"
+          cp "$PROOT_BIN" ../proot-raw
+          cd ..
+          file proot-raw
+
+      - name: Download and extract libtalloc from Termux
+        run: |
+          echo "Fetching libtalloc package..."
+          wget -q \
+            "https://packages.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz" \
+            -O packages.gz
+
+          TALLOC_PATH=$(zcat packages.gz | \
+            awk '/^Package: libtalloc$/{found=1} found && /^Filename:/{print $2; exit}')
+          echo "libtalloc package: $TALLOC_PATH"
+
+          wget -q "https://packages.termux.dev/apt/termux-main/${TALLOC_PATH}" -O libtalloc.deb
+
+          mkdir talloc_extract && cd talloc_extract
+          ar x ../libtalloc.deb
+          if [ -f data.tar.xz ]; then
+            tar xf data.tar.xz
+          elif [ -f data.tar.zst ]; then
+            zstd -d data.tar.zst -o data.tar && tar xf data.tar
+          fi
+          TALLOC_LIB=$(find . -type f -name "libtalloc.so*" | head -1)
+          echo "Found libtalloc: $TALLOC_LIB"
+          cp "$TALLOC_LIB" ../libtalloc-raw.so
+          cd ..
+          file libtalloc-raw.so
+
+      - name: Patch proot and prepare jniLibs files
+        run: |
+          # Patch proot to look for libtalloc.so instead of libtalloc.so.2
+          # (Android jniLibs requires lib*.so — no version suffix allowed)
+          patchelf --replace-needed libtalloc.so.2 libtalloc.so proot-raw
+
+          # Verify the patch worked
+          echo "=== proot dependencies after patch ==="
+          patchelf --print-needed proot-raw
+
+          # Copy to jniLibs
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp proot-raw android/app/src/main/jniLibs/arm64-v8a/libproot.so
+          cp libtalloc-raw.so android/app/src/main/jniLibs/arm64-v8a/libtalloc.so
+
+          echo "=== jniLibs contents ==="
+          ls -lh android/app/src/main/jniLibs/arm64-v8a/
+          file android/app/src/main/jniLibs/arm64-v8a/libproot.so
+          file android/app/src/main/jniLibs/arm64-v8a/libtalloc.so
+
+      - name: Commit to repository
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add android/app/src/main/jniLibs/arm64-v8a/libproot.so
+          git add android/app/src/main/jniLibs/arm64-v8a/libtalloc.so
+          git diff --staged --quiet && echo "No changes to commit" || \
+            git commit -m "chore: update proot + libtalloc native libs (auto-patched for Android)"
+          git push

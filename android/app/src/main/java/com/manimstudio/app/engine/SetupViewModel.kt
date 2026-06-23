@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -19,6 +20,7 @@ data class SetupState(
     val bytesTotal: Long = 0L,
     val error: String? = null,
     val updateAvailable: BootstrapManifest? = null,
+    val bootstrapSizeBytes: Long = 0L,
 ) {
     enum class Phase {
         CHECKING, NEEDS_SETUP, WIFI_REQUIRED, INSTALLING, READY, ERROR
@@ -34,6 +36,8 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(SetupState())
     val state: StateFlow<SetupState> = _state.asStateFlow()
 
+
+
     // ── Public checks ─────────────────────────────────────────────────────────
 
     fun isBootstrapInstalled(): Boolean {
@@ -48,11 +52,25 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
     // ── Setup flow ────────────────────────────────────────────────────────────
 
     fun beginSetupCheck() {
-        if (isBootstrapInstalled()) {
-            _state.value = SetupState(phase = SetupState.Phase.READY, progress = 100)
-            checkForUpdateAsync()
-        } else {
-            _state.value = SetupState(phase = SetupState.Phase.NEEDS_SETUP)
+        viewModelScope.launch {
+            if (isBootstrapInstalled()) {
+                _state.value = SetupState(phase = SetupState.Phase.READY, progress = 100)
+                checkForUpdateAsync()
+            } else {
+                _state.value = SetupState(phase = SetupState.Phase.NEEDS_SETUP)
+                // Fetch manifest in background to get real size
+                launch {
+                    try {
+                        val installer = makeInstaller()
+                        val manifest = installer.fetchManifestPublic()
+                        if (manifest != null) {
+                            _state.update { it.copy(
+                                bootstrapSizeBytes = manifest.bootstrap_size_bytes
+                            )}
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
         }
     }
 
@@ -97,7 +115,7 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
 
     fun retrySetup() {
         installJob?.cancel()
-        engine.usrDir.deleteRecursively()
+        engine.rootfsDir.deleteRecursively()
         File(engine.filesDir, ".installed").delete()
         _state.value = SetupState(phase = SetupState.Phase.NEEDS_SETUP)
     }
@@ -110,11 +128,15 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Background update check ───────────────────────────────────────────────
 
+    private fun makeInstaller(): BootstrapInstaller {
+        return BootstrapInstaller(
+            context = getApplication(), engine = engine, onProgress = {})
+    }
+
     private fun checkForUpdateAsync() {
         viewModelScope.launch {
             try {
-                val installer = BootstrapInstaller(
-                    context = getApplication(), engine = engine, onProgress = {})
+                val installer = makeInstaller()
                 val update = installer.checkForUpdate()
                 if (update != null) {
                     _state.value = _state.value.copy(updateAvailable = update)

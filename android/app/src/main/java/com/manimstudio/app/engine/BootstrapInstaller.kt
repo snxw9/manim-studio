@@ -100,7 +100,7 @@ class BootstrapInstaller(
                 // Extract
                 onProgress(InstallProgress("Extracting files", 76,
                     "This may take a few minutes..."))
-                val extractResult = extractTarGz(archiveFile, engine.usrDir)
+                val extractResult = extractTarGz(archiveFile, engine.rootfsDir)
                 if (extractResult != null) return@withContext extractResult
                 archiveFile.delete()
 
@@ -176,6 +176,10 @@ class BootstrapInstaller(
         }
 
         return null // all good
+    }
+
+    suspend fun fetchManifestPublic(): BootstrapManifest? = withContext(Dispatchers.IO) {
+        fetchManifest()
     }
 
     private fun fetchManifest(): BootstrapManifest? {
@@ -327,7 +331,7 @@ class BootstrapInstaller(
 
     private fun injectDns() {
         try {
-            val resolv = File(engine.usrDir, "etc/resolv.conf")
+            val resolv = File(engine.rootfsDir, "etc/resolv.conf")
             resolv.parentFile?.mkdirs()
             resolv.writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
             Log.i(TAG, "DNS injected")
@@ -337,16 +341,49 @@ class BootstrapInstaller(
     }
 
     private suspend fun verify(): InstallResult? {
+        // Log rootfs structure before running proot
+        logRootfsDiagnostics()
+        
         val (exitCode, output) = engine.exec(
-            listOf("/usr/bin/python3", "-c",
-                "import manim; import cairo; print(manim.__version__)")
+            command = listOf(
+                "/usr/bin/python3", "-c",
+                "import manim, cairo; print('OK', manim.__version__)"
+            ),
         )
-        return if (exitCode != 0) {
+        return if (exitCode != 0 || !output.contains("OK")) {
             InstallResult.Error("Manim verification failed:\n$output")
         } else {
-            Log.i(TAG, "Verification OK: $output")
+            Log.i(TAG, "Verification passed: $output")
             null
         }
+    }
+
+    private fun logRootfsDiagnostics() {
+        val rootfs = engine.rootfsDir
+        Log.d(TAG, "=== Rootfs Diagnostics ===")
+        Log.d(TAG, "rootfsDir: ${rootfs.absolutePath}")
+        Log.d(TAG, "rootfsDir exists: ${rootfs.exists()}")
+        
+        listOf(
+            "lib", "bin", "usr",
+            "lib/ld-linux-aarch64.so.1",
+            "usr/lib",
+            "usr/lib/ld-linux-aarch64.so.1",
+            "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+            "usr/bin/python3",
+        ).forEach { path ->
+            val f = File(rootfs, path)
+            val isSymlink = try {
+                java.nio.file.Files.isSymbolicLink(f.toPath())
+            } catch (_: Exception) { false }
+            val target = if (isSymlink) {
+                try { java.nio.file.Files.readSymbolicLink(f.toPath()).toString() }
+                catch (_: Exception) { "unreadable" }
+            } else ""
+            Log.d(TAG, "  $path | exists=${f.exists()} | " +
+                  "symlink=$isSymlink | target=$target")
+        }
+        Log.d(TAG, "=========================")
     }
 
     private fun isNewerVersion(remote: String, local: String): Boolean {

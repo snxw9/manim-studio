@@ -1,95 +1,102 @@
 package com.manimstudio.app.engine
 
 import android.content.Context
-import android.util.Log
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 
-private const val TAG = "ProotEngine"
-
-/**
- * Manages the proot Linux environment and Manim execution.
- */
-class ProotEngine(private val context: Context) {
+class ProotEngine(context: Context) {
 
     val filesDir: File = context.filesDir
-    val usrDir: File = File(filesDir, "usr")
+    val rootfsDir: File = File(filesDir, "rootfs")
     val homeDir: File = File(filesDir, "home/manim")
     val rendersDir: File = File(filesDir, "renders")
-    val tmpDir: File = File(filesDir, "tmp")
-    val prootBin: File = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
-    val pythonBin: File = File(usrDir, "usr/bin/python3")
 
-    /**
-     * Run a command inside the proot Linux environment.
-     * Returns Pair(exitCode, output)
-     */
-    suspend fun exec(
-        command: List<String>,
-        env: Map<String, String> = emptyMap(),
-        onOutput: ((String) -> Unit)? = null,
-    ): Pair<Int, String> = withContext(Dispatchers.IO) {
+    val pythonBin: File = File(rootfsDir, "usr/bin/python3")
 
-        val prootCmd = buildProotCommand(command)
+    // proot binary — must be in nativeLibraryDir (exec-allowed by Android)
+    val prootBin: File = File(
+        context.applicationInfo.nativeLibraryDir, "libproot.so"
+    )
 
-        Log.d(TAG, "exec: ${prootCmd.joinToString(" ")}")
-
-        val processEnv = buildEnvironment(env)
-
-        val process = ProcessBuilder(prootCmd)
-            .directory(filesDir)
-            .redirectErrorStream(true)
-            .apply {
-                environment().putAll(processEnv)
-            }
-            .start()
-
-        val output = StringBuilder()
-        val reader = process.inputStream.bufferedReader()
-
-        reader.forEachLine { line ->
-            output.appendLine(line)
-            onOutput?.invoke(line)
-            Log.d(TAG, line)
-        }
-
-        val exitCode = process.waitFor()
-        Pair(exitCode, output.toString())
+    fun ensureDirs() {
+        listOf(rootfsDir, homeDir, rendersDir,
+               File(filesDir, "tmp")).forEach { it.mkdirs() }
     }
 
-    private fun buildProotCommand(command: List<String>): List<String> {
+
+    fun buildProotCommand(
+        command: List<String>,
+        workDir: String = "/home/manim",
+    ): List<String> {
+        val usrLib   = File(rootfsDir, "usr/lib").absolutePath
+        val usrBin   = File(rootfsDir, "usr/bin").absolutePath
+        val usrSbin  = File(rootfsDir, "usr/sbin").absolutePath
+
         return listOf(
             prootBin.absolutePath,
             "--kill-on-exit",
             "--link2symlink",
             "-0",
-            "-r", usrDir.absolutePath,
+            "-r", rootfsDir.absolutePath,
+
+            // Debian usrmerge: bind real dirs so proot finds ELF interpreter
+            "-b", "$usrLib:/lib",
+            "-b", "$usrBin:/bin",
+            "-b", "$usrSbin:/sbin",
+
+            // System
             "-b", "/dev",
             "-b", "/proc",
             "-b", "/sys",
-            "-b", "${filesDir.absolutePath}/tmp:/tmp",
+
+            // App directories
+            "-b", "${File(filesDir, "tmp").absolutePath}:/tmp",
             "-b", "${rendersDir.absolutePath}:/renders",
-            "-w", "/home/manim",
+            "-b", "${homeDir.absolutePath}:/home/manim",
+
+            "-w", workDir,
         ) + command
     }
 
-    private fun buildEnvironment(extra: Map<String, String>): Map<String, String> {
-        val nativeLibsDir = context.applicationInfo.nativeLibraryDir
-        return mapOf(
-            "HOME" to "/home/manim",
-            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-            "TERM" to "xterm-256color",
-            "LANG" to "C.UTF-8",
-            "LC_ALL" to "C.UTF-8",
-            "TMPDIR" to "/tmp",
-            "DEBIAN_FRONTEND" to "noninteractive",
-            "PROOT_LOADER" to "$nativeLibsDir/libproot-loader.so"
-        ) + extra
-    }
+    fun buildEnvironment(extra: Map<String, String> = emptyMap()): Map<String, String> = mapOf(
+        "HOME" to "/home/manim",
+        "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "TERM" to "xterm-256color",
+        "LANG" to "C.UTF-8",
+        "LC_ALL" to "C.UTF-8",
+        "TMPDIR" to "/tmp",
+        "DEBIAN_FRONTEND" to "noninteractive",
+    ) + extra
 
-    fun ensureDirs() {
-        listOf(usrDir, homeDir, rendersDir, tmpDir,
-               File(filesDir, "tmp")).forEach { it.mkdirs() }
+    suspend fun exec(
+        command: List<String>,
+        workDir: String = "/home/manim",
+        env: Map<String, String> = emptyMap(),
+        onOutput: (String) -> Unit = {},
+    ): Pair<Int, String> = kotlinx.coroutines.withContext(
+        kotlinx.coroutines.Dispatchers.IO
+    ) {
+        ensureDirs()
+        val fullCmd = buildProotCommand(command, workDir)
+        android.util.Log.d("ProotEngine", "Running: ${fullCmd.joinToString(" ")}")
+        android.util.Log.d("ProotEngine", "prootBin exists: ${prootBin.exists()}")
+        android.util.Log.d("ProotEngine", "rootfsDir exists: ${rootfsDir.exists()}")
+
+        val pb = ProcessBuilder(fullCmd).apply {
+            environment().clear()
+            environment().putAll(buildEnvironment(env))
+            redirectErrorStream(true)
+        }
+        val process = pb.start()
+        val output = StringBuilder()
+        process.inputStream.bufferedReader().use { reader ->
+            reader.forEachLine { line ->
+                output.appendLine(line)
+                onOutput(line)
+                android.util.Log.d("ProotEngine", "output: $line")
+            }
+        }
+        val exit = process.waitFor()
+        android.util.Log.d("ProotEngine", "exit code: $exit")
+        Pair(exit, output.toString())
     }
 }

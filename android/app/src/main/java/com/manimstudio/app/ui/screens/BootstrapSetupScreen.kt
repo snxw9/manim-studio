@@ -104,12 +104,14 @@ fun BootstrapSetupScreen(
                 SetupState.Phase.NEEDS_SETUP -> {
                     NeedsSetupContent(
                         userName = userName,
+                        bootstrapSizeBytes = state.bootstrapSizeBytes,
                         onStart = { setupViewModel.startInstallation(allowMobileData = false) },
                     )
                 }
 
                 SetupState.Phase.WIFI_REQUIRED -> {
                     WifiRequiredContent(
+                        bootstrapSizeBytes = state.bootstrapSizeBytes,
                         onWifiOnly = { /* User will connect to Wi-Fi and retry */ },
                         onContinueAnyway = { setupViewModel.confirmMobileDataInstall() },
                     )
@@ -142,7 +144,13 @@ fun BootstrapSetupScreen(
 }
 
 @Composable
-private fun NeedsSetupContent(userName: String, onStart: () -> Unit) {
+private fun NeedsSetupContent(
+    userName: String,
+    bootstrapSizeBytes: Long,
+    onStart: () -> Unit,
+) {
+    val totalSize = formatSize(bootstrapSizeBytes)
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -183,7 +191,7 @@ private fun NeedsSetupContent(userName: String, onStart: () -> Unit) {
                     color = MaterialTheme.colorScheme.outlineVariant,
                     modifier = Modifier.padding(vertical = 2.dp),
                 )
-                DownloadItem("Total", "~600MB", highlight = true)
+                DownloadItem("Total", totalSize, highlight = true)
             }
         }
 
@@ -348,7 +356,12 @@ private fun ErrorContent(error: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun WifiRequiredContent(onWifiOnly: () -> Unit, onContinueAnyway: () -> Unit) {
+private fun WifiRequiredContent(
+    bootstrapSizeBytes: Long,
+    onWifiOnly: () -> Unit,
+    onContinueAnyway: () -> Unit,
+) {
+    val totalSize = formatSize(bootstrapSizeBytes)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -361,7 +374,7 @@ private fun WifiRequiredContent(onWifiOnly: () -> Unit, onContinueAnyway: () -> 
             color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Light)
         Text(
-            "The download is approximately 600MB. " +
+            "The download is approximately $totalSize. " +
             "This may use significant mobile data and could take longer.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -384,5 +397,16 @@ private fun WifiRequiredContent(onWifiOnly: () -> Unit, onContinueAnyway: () -> 
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+    }
+}
+
+private fun formatSize(bytes: Long): String {
+    if (bytes <= 0L) return "~600MB" // fallback while loading
+    val mb = bytes / (1024L * 1024L)
+    return if (mb >= 1024) {
+        val gb = mb / 1024f
+        "%.1f GB".format(gb)
+    } else {
+        "${mb}MB"
     }
 }
