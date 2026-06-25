@@ -3,7 +3,7 @@ package com.manimstudio.app.engine
 import android.content.Context
 import java.io.File
 
-class ProotEngine(context: Context) {
+class ProotEngine(private val context: Context) {
 
     val filesDir: File = context.filesDir
     val rootfsDir: File = File(filesDir, "rootfs")
@@ -57,15 +57,19 @@ class ProotEngine(context: Context) {
         ) + command
     }
 
-    fun buildEnvironment(extra: Map<String, String> = emptyMap()): Map<String, String> = mapOf(
-        "HOME" to "/home/manim",
-        "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        "TERM" to "xterm-256color",
-        "LANG" to "C.UTF-8",
-        "LC_ALL" to "C.UTF-8",
-        "TMPDIR" to "/tmp",
-        "DEBIAN_FRONTEND" to "noninteractive",
-    ) + extra
+    fun buildEnvironment(extra: Map<String, String> = emptyMap()): Map<String, String> {
+        val nativeDir = context.applicationInfo.nativeLibraryDir
+        return mapOf(
+            "HOME" to "/home/manim",
+            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "TERM" to "xterm-256color",
+            "LANG" to "C.UTF-8",
+            "LC_ALL" to "C.UTF-8",
+            "TMPDIR" to "/tmp",
+            "DEBIAN_FRONTEND" to "noninteractive",
+            "LD_LIBRARY_PATH" to nativeDir,
+        ) + extra
+    }
 
     suspend fun exec(
         command: List<String>,

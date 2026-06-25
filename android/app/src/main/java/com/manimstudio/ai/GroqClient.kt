@@ -70,7 +70,7 @@ object GroqClient {
             .build()
 
         val response = client.newCall(request).execute()
-        val responseBody = response.body?.string() 
+        val responseBody = response.body.string()
             ?: throw Exception("Empty response from Groq")
 
         if (!response.isSuccessful) {
@@ -79,7 +79,7 @@ object GroqClient {
             throw Exception("Groq error ${response.code}: $msg")
         }
 
-        var code = JSONObject(responseBody)
+        val code = JSONObject(responseBody)
             .getJSONArray("choices")
             .getJSONObject(0)
             .getJSONObject("message")
@@ -109,7 +109,7 @@ object GroqClient {
             .build()
 
         val response = client.newCall(request).execute()
-        val responseBody = response.body?.string() 
+        val responseBody = response.body.string()
             ?: throw Exception("Empty response from engine")
 
         if (!response.isSuccessful) {
@@ -130,7 +130,7 @@ object GroqClient {
                 .get()
                 .build()
             val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: return@withContext null
+            val body = response.body.string() ?: return@withContext null
             if (response.isSuccessful) JSONObject(body) else null
         } catch (e: Exception) {
             null

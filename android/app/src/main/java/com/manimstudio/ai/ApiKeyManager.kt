@@ -3,6 +3,7 @@ package com.manimstudio.ai
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import androidx.core.content.edit
 
 object ApiKeyManager {
 
@@ -15,19 +16,19 @@ object ApiKeyManager {
     )
 
     fun setGroqKey(context: Context, key: String) =
-        getPrefs(context).edit().putString("groq_api_key", key).apply()
+        getPrefs(context).edit { putString("groq_api_key", key) }
 
     fun getGroqKey(context: Context): String =
         getPrefs(context).getString("groq_api_key", "") ?: ""
 
     fun setGeminiKey(context: Context, key: String) =
-        getPrefs(context).edit().putString("gemini_api_key", key).apply()
+        getPrefs(context).edit { putString("gemini_api_key", key) }
 
     fun getGeminiKey(context: Context): String =
         getPrefs(context).getString("gemini_api_key", "") ?: ""
 
     fun setOpenAIKey(context: Context, key: String) =
-        getPrefs(context).edit().putString("openai_api_key", key).apply()
+        getPrefs(context).edit { putString("openai_api_key", key) }
 
     fun getOpenAIKey(context: Context): String =
         getPrefs(context).getString("openai_api_key", "") ?: ""
