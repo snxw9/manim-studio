@@ -1,6 +1,8 @@
 package com.manimstudio.app.ui
 
 import android.app.Application
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -31,6 +33,7 @@ import com.manimstudio.app.ui.screens.WelcomeRenderScreen
 import com.manimstudio.app.viewmodel.SettingsViewModel
 import com.manimstudio.app.viewmodel.StudioViewModel
 
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 fun AppNavigation(
     settingsViewModel: SettingsViewModel,
@@ -89,13 +92,12 @@ fun AppNavigation(
             BootstrapSetupScreen(
                 setupViewModel = setupViewModel,
                 userName = settings.userName,
-                onComplete = {
-                    // Bootstrap installed — now show welcome render
-                    navController.navigate("welcome_render") {
-                        popUpTo("bootstrap_setup") { inclusive = true }
-                    }
-                },
-            )
+            ) {
+                // Bootstrap installed — now show welcome render
+                navController.navigate("welcome_render") {
+                    popUpTo("bootstrap_setup") { inclusive = true }
+                }
+            }
         }
 
         // Step 3: Welcome Manim animation (bootstrap is now ready)

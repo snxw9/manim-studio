@@ -54,6 +54,15 @@ manim-studio/
 - **GitHub Releases:** APK downloads for each version tag
 - **Play Store:** Coming when ready for public release
 
+## Documentation
+
+Detailed documentation is available for each component of the project:
+
+- [Engine Documentation](file:///C:/Users/Abdulfatai/Documents/manim-studio/docs/ENGINE.md): Python FastAPI backend, AI model router, code validator, and Manim rendering.
+- [Web App Documentation](file:///C:/Users/Abdulfatai/Documents/manim-studio/docs/WEB.md): Next.js web interface, Monaco editor workspace, and proxy services.
+- [Android App Documentation](file:///C:/Users/Abdulfatai/Documents/manim-studio/docs/ANDROID.md): Kotlin app structure, Jetpack Compose screens, and the PRoot virtualized guest OS environment.
+
 ## Contributing
 
-See docs/CONTEXT.md for full architecture documentation.
+See [CONTEXT.md](file:///C:/Users/Abdulfatai/Documents/manim-studio/docs/CONTEXT.md) for full architecture context and historical blueprints.
+

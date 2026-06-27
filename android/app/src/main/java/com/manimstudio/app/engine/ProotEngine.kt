@@ -1,106 +1,119 @@
 package com.manimstudio.app.engine
 
+import android.annotation.SuppressLint
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
-class ProotEngine(private val context: Context) {
+class ProotEngine(val context: Context) {
 
-    val filesDir: File = context.filesDir
-    val rootfsDir: File = File(filesDir, "rootfs")
-    val homeDir: File = File(filesDir, "home/manim")
-    val rendersDir: File = File(filesDir, "renders")
+    // CRITICAL: Hardcode /data/data/ — never use context.filesDir.absolutePath
+    // context.filesDir returns /data/user/0/... but proot's internal realpath()
+    // always resolves to /data/data/... on Android. Any mismatch causes every
+    // temp file operation to fail with ENOENT. This is the root cause of all
+    // previous failures. Termux itself hardcodes /data/data/ for the same reason.
+    @SuppressLint("SdCardPath")
+    private val base = "/data/data/${context.packageName}"
 
-    val pythonBin: File = File(rootfsDir, "usr/bin/python3")
+    val filesDir        = File("$base/files")
+    val rootfsDir       = File("$base/files/rootfs")
+    val homeDir         = File("$base/files/home/manim")
+    val rendersDir      = File("$base/files/renders")
+    private val tmpDir      = File("$base/files/tmp")
+    private val prootTmpDir = File("$base/files/proot_tmp")
 
-    // proot binary — must be in nativeLibraryDir (exec-allowed by Android)
-    val prootBin: File = File(
-        context.applicationInfo.nativeLibraryDir, "libproot.so"
-    )
+    val pythonBin = File(rootfsDir, "usr/bin/python3")
+    val ffmpegBin = File(rootfsDir, "usr/bin/ffmpeg")
+    val latexBin  = File(rootfsDir, "usr/bin/latex")
 
+    val prootBin  = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
+
+    @SuppressLint("SetWorldReadable", "SetWorldWritable")
     fun ensureDirs() {
-        listOf(rootfsDir, homeDir, rendersDir,
-               File(filesDir, "tmp")).forEach { it.mkdirs() }
+        listOf(rootfsDir, homeDir, rendersDir, tmpDir, prootTmpDir).forEach {
+            it.mkdirs()
+            it.setReadable(true, false)
+            it.setWritable(true, false)
+            it.setExecutable(true, false)
+        }
     }
-
 
     fun buildProotCommand(
         command: List<String>,
         workDir: String = "/home/manim",
-    ): List<String> {
-        val usrLib   = File(rootfsDir, "usr/lib").absolutePath
-        val usrBin   = File(rootfsDir, "usr/bin").absolutePath
-        val usrSbin  = File(rootfsDir, "usr/sbin").absolutePath
+    ): List<String> = listOf(
+        prootBin.absolutePath,
+        "--kill-on-exit",
+        "--link2symlink",
+        "-0",
+        "--kernel-release=5.4.0-faked",
+        "-r", rootfsDir.absolutePath,
+        "-b", "/dev",
+        "-b", "/dev/urandom:/dev/random",
+        "-b", "/proc",
+        "-b", "/sys",
+        "-b", "${tmpDir.absolutePath}:/tmp",
+        "-b", "${rendersDir.absolutePath}:/renders",
+        "-b", "${homeDir.absolutePath}:/home/manim",
+        "-w", workDir,
+    ) + command
 
-        return listOf(
-            prootBin.absolutePath,
-            "--kill-on-exit",
-            "--link2symlink",
-            "-0",
-            "-r", rootfsDir.absolutePath,
-
-            // Debian usrmerge: bind real dirs so proot finds ELF interpreter
-            "-b", "$usrLib:/lib",
-            "-b", "$usrBin:/bin",
-            "-b", "$usrSbin:/sbin",
-
-            // System
-            "-b", "/dev",
-            "-b", "/proc",
-            "-b", "/sys",
-
-            // App directories
-            "-b", "${File(filesDir, "tmp").absolutePath}:/tmp",
-            "-b", "${rendersDir.absolutePath}:/renders",
-            "-b", "${homeDir.absolutePath}:/home/manim",
-
-            "-w", workDir,
-        ) + command
-    }
-
-    fun buildEnvironment(extra: Map<String, String> = emptyMap()): Map<String, String> {
-        val nativeDir = context.applicationInfo.nativeLibraryDir
-        return mapOf(
-            "HOME" to "/home/manim",
-            "PATH" to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-            "TERM" to "xterm-256color",
-            "LANG" to "C.UTF-8",
-            "LC_ALL" to "C.UTF-8",
-            "TMPDIR" to "/tmp",
-            "DEBIAN_FRONTEND" to "noninteractive",
-            "LD_LIBRARY_PATH" to nativeDir,
-        ) + extra
-    }
+    fun buildEnvironment(
+        extra: Map<String, String> = emptyMap(),
+    ): Map<String, String> = mapOf(
+        "HOME"             to "/home/manim",
+        "PATH"             to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "TERM"             to "xterm-256color",
+        "LANG"             to "C.UTF-8",
+        "LC_ALL"           to "C.UTF-8",
+        "TMPDIR"           to "/tmp",
+        "DEBIAN_FRONTEND"  to "noninteractive",
+        // LD_LIBRARY_PATH: needed for Android's linker to find libtalloc.so
+        // when proot itself starts. glibc binaries inside the rootfs won't
+        // accidentally use Android's Bionic libs because their SONAMEs differ.
+        "LD_LIBRARY_PATH"  to context.applicationInfo.nativeLibraryDir,
+        // PROOT_TMP_DIR: must match what proot's realpath() returns.
+        // /data/data/ IS what realpath() returns — now matches exactly.
+        "PROOT_TMP_DIR"    to prootTmpDir.absolutePath,
+        // PROOT_NO_SECCOMP: Android 10+ seccomp filters block syscalls proot
+        // relies on. This disables that check.
+        "PROOT_NO_SECCOMP" to "1",
+    ) + extra
 
     suspend fun exec(
         command: List<String>,
         workDir: String = "/home/manim",
         env: Map<String, String> = emptyMap(),
         onOutput: (String) -> Unit = {},
-    ): Pair<Int, String> = kotlinx.coroutines.withContext(
-        kotlinx.coroutines.Dispatchers.IO
-    ) {
+    ): Pair<Int, String> = withContext(Dispatchers.IO) {
         ensureDirs()
         val fullCmd = buildProotCommand(command, workDir)
-        android.util.Log.d("ProotEngine", "Running: ${fullCmd.joinToString(" ")}")
-        android.util.Log.d("ProotEngine", "prootBin exists: ${prootBin.exists()}")
-        android.util.Log.d("ProotEngine", "rootfsDir exists: ${rootfsDir.exists()}")
+
+        android.util.Log.d("ProotEngine", "prootBin: ${prootBin.absolutePath}")
+        android.util.Log.d("ProotEngine", "prootBin.exists: ${prootBin.exists()}")
+        android.util.Log.d("ProotEngine", "prootTmpDir: ${prootTmpDir.absolutePath}")
+        android.util.Log.d("ProotEngine", "prootTmpDir.exists: ${prootTmpDir.exists()}")
+        android.util.Log.d("ProotEngine", "prootTmpDir.canWrite: ${prootTmpDir.canWrite()}")
+        android.util.Log.d("ProotEngine", "CMD: ${fullCmd.joinToString(" ")}")
 
         val pb = ProcessBuilder(fullCmd).apply {
             environment().clear()
             environment().putAll(buildEnvironment(env))
             redirectErrorStream(true)
         }
+
         val process = pb.start()
         val output = StringBuilder()
         process.inputStream.bufferedReader().use { reader ->
             reader.forEachLine { line ->
                 output.appendLine(line)
                 onOutput(line)
-                android.util.Log.d("ProotEngine", "output: $line")
+                android.util.Log.d("ProotEngine", "proot: $line")
             }
         }
         val exit = process.waitFor()
-        android.util.Log.d("ProotEngine", "exit code: $exit")
+        android.util.Log.d("ProotEngine", "exit: $exit")
         Pair(exit, output.toString())
     }
 }

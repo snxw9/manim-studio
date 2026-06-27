@@ -1,6 +1,8 @@
 package com.manimstudio.app.engine
 
 import android.app.Application
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -19,6 +21,7 @@ data class SetupState(
     val bytesDownloaded: Long = 0L,
     val bytesTotal: Long = 0L,
     val error: String? = null,
+    val diagnostics: String = "",
     val updateAvailable: BootstrapManifest? = null,
     val bootstrapSizeBytes: Long = 0L,
 ) {
@@ -74,6 +77,7 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     fun startInstallation(allowMobileData: Boolean = false) {
         installJob?.cancel()
         installJob = viewModelScope.launch {
@@ -106,11 +110,13 @@ class SetupViewModel(app: Application) : AndroidViewModel(app) {
                     _state.value = SetupState(
                         phase = SetupState.Phase.ERROR,
                         error = result.message,
+                        diagnostics = result.diagnostics,
                     )
             }
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     fun confirmMobileDataInstall() = startInstallation(allowMobileData = true)
 
     fun retrySetup() {

@@ -1,5 +1,7 @@
 package com.manimstudio.app.ui.screens
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -17,11 +19,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,6 +48,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.Clipboard
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -53,13 +64,17 @@ import com.manimstudio.app.ui.components.animations.SparkIcon
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 fun BootstrapSetupScreen(
     setupViewModel: SetupViewModel,
     userName: String,
+    setText: (Clipboard.(AnnotatedString) -> Unit)? = null,
     onComplete: () -> Unit,
 ) {
     val state by setupViewModel.state.collectAsState()
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboard.current
 
     // Auto-proceed when ready
     LaunchedEffect(state.phase) {
@@ -128,7 +143,16 @@ fun BootstrapSetupScreen(
                 SetupState.Phase.ERROR -> {
                     ErrorContent(
                         error = state.error ?: "Unknown error",
+                        diagnostics = state.diagnostics,
                         onRetry = { setupViewModel.retrySetup() },
+                        onCopyDiagnostics = {
+                            setText?.invoke(
+                                clipboardManager,
+                                androidx.compose.ui.text.AnnotatedString(
+                                    "ERROR:\n${state.error}\n\nDIAGNOSTICS:\n${state.diagnostics}"
+                                )
+                            )
+                        },
                     )
                 }
             }
@@ -313,45 +337,107 @@ private fun ReadyContent() {
 }
 
 @Composable
-private fun ErrorContent(error: String, onRetry: () -> Unit) {
+private fun ErrorContent(
+    error: String,
+    diagnostics: String,
+    onRetry: () -> Unit,
+    onCopyDiagnostics: () -> Unit,
+) {
+    val scrollState = rememberScrollState()
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState),
     ) {
-        Icon(Icons.Outlined.ErrorOutline, null,
+        Icon(
+            Icons.Outlined.ErrorOutline, null,
             tint = MaterialTheme.colorScheme.error,
-            modifier = Modifier.size(48.dp))
-        Text("Setup failed",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.error)
-        Text(
-            "Check your internet connection and try again.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
+            modifier = Modifier.size(40.dp),
         )
+
+        Text(
+            "Setup failed",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+
+        // Error message box
         Surface(
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                error.takeLast(300),
-                style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    lineHeight = 14.sp),
-                modifier = Modifier.padding(10.dp),
+                error,
+                style = TextStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    lineHeight = 16.sp,
+                ),
+                modifier = Modifier.padding(12.dp),
             )
         }
+
+        // Diagnostics — always visible, full detail
+        if (diagnostics.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Diagnostics",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = onCopyDiagnostics) {
+                    Icon(Icons.Outlined.ContentCopy, null,
+                        modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Copy", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(
+                    0.5.dp,
+                    MaterialTheme.colorScheme.outlineVariant,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    diagnostics,
+                    style = TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        lineHeight = 13.sp,
+                    ),
+                    modifier = Modifier.padding(10.dp),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+
         Button(
             onClick = onRetry,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(percent = 50),
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary),
+                containerColor = MaterialTheme.colorScheme.primary,
+            ),
         ) {
             Text("Try Again", fontWeight = FontWeight.SemiBold)
         }
+
+        Spacer(Modifier.height(16.dp))
     }
 }
 

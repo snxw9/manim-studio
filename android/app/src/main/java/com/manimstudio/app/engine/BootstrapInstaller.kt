@@ -3,7 +3,9 @@ package com.manimstudio.app.engine
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -48,7 +50,11 @@ data class InstallProgress(
 
 sealed class InstallResult {
     object Success : InstallResult()
-    data class Error(val message: String, val cause: Throwable? = null) : InstallResult()
+    data class Error(
+        val message: String,
+        val cause: Throwable? = null,
+        val diagnostics: String = "",
+    ) : InstallResult()
     object WifiRequired : InstallResult()
 }
 
@@ -66,6 +72,7 @@ class BootstrapInstaller(
 
     // ── Public API ────────────────────────────────────────────────────────────
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     suspend fun install(allowMobileData: Boolean = false): InstallResult =
         withContext(Dispatchers.IO) {
             try {
@@ -340,22 +347,109 @@ class BootstrapInstaller(
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun collectDiagnostics(): String {
+        val sb = StringBuilder()
+        val rootfsDir = engine.rootfsDir
+        val nativeDir = context.applicationInfo.nativeLibraryDir
+
+        sb.appendLine("=== PROOT BINARY ===")
+        val prootFile = engine.prootBin
+        sb.appendLine("path: ${prootFile.absolutePath}")
+        sb.appendLine("exists: ${prootFile.exists()}")
+        if (prootFile.exists()) {
+            sb.appendLine("size: ${prootFile.length()} bytes")
+            sb.appendLine("canExecute: ${prootFile.canExecute()}")
+            // Read first 4 bytes to check ELF magic
+            try {
+                val magic = prootFile.inputStream().use { it.readNBytes(4) }
+                sb.appendLine("magic: ${magic.joinToString(" ") { "%02X".format(it) }}")
+                sb.appendLine("isELF: ${magic[0] == 0x7F.toByte() && magic[1] == 'E'.code.toByte()}")
+            } catch (e: Exception) {
+                sb.appendLine("magic: error - ${e.message}")
+            }
+        }
+
+        sb.appendLine("")
+        sb.appendLine("=== NATIVE LIBS DIR ===")
+        sb.appendLine("path: $nativeDir")
+        val nativeDirFile = File(nativeDir)
+        nativeDirFile.listFiles()?.forEach { f ->
+            sb.appendLine("  ${f.name} (${f.length()} bytes)")
+        } ?: sb.appendLine("  (empty or inaccessible)")
+
+        sb.appendLine("")
+        sb.appendLine("=== ROOTFS DIR ===")
+        sb.appendLine("path: ${rootfsDir.absolutePath}")
+        sb.appendLine("exists: ${rootfsDir.exists()}")
+        if (rootfsDir.exists()) {
+            sb.appendLine("top-level contents:")
+            rootfsDir.listFiles()?.take(20)?.forEach { f ->
+                val isLink = java.nio.file.Files.isSymbolicLink(f.toPath())
+                val target = if (isLink) {
+                    try { " -> " + java.nio.file.Files.readSymbolicLink(f.toPath()) }
+                    catch (_: Exception) { " -> ?" }
+                } else ""
+                sb.appendLine("  ${f.name}${if (isLink) target else ""}")
+            }
+        }
+
+        sb.appendLine("")
+        sb.appendLine("=== ESSENTIAL FILES ===")
+        listOf(
+            "usr/bin/python3",
+            "usr/bin/sh",
+            "usr/bin/bash",
+            "usr/lib",
+            "lib",
+            "lib64",
+            "bin",
+            "sbin",
+            "etc/passwd",
+            "etc/resolv.conf",
+            "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+        ).forEach { rel ->
+            val f = File(rootfsDir, rel)
+            val isLink = try {
+                java.nio.file.Files.isSymbolicLink(f.toPath())
+            } catch (_: Exception) { false }
+            val target = if (isLink) {
+                try { " -> " + java.nio.file.Files.readSymbolicLink(f.toPath()) }
+                catch (_: Exception) { " -> ?" }
+            } else ""
+            sb.appendLine("  $rel: exists=${f.exists()} symlink=$isLink$target")
+        }
+
+        sb.appendLine("")
+        sb.appendLine("=== PROOT COMMAND ===")
+        val testCmd = engine.buildProotCommand(
+            listOf("/usr/bin/python3", "--version"),
+            "/home/manim",
+        )
+        sb.appendLine(testCmd.joinToString(" \\\n  "))
+
+        sb.appendLine("")
+        sb.appendLine("=== ENVIRONMENT ===")
+        engine.buildEnvironment().forEach { (k, v) ->
+            sb.appendLine("  $k=$v")
+        }
+
+        return sb.toString()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private suspend fun verify(): InstallResult? {
-        // Log rootfs structure before running proot
-        logRootfsDiagnostics()
-        
+        val diag = collectDiagnostics()
         val (exitCode, output) = engine.exec(
-            command = listOf(
-                "/usr/bin/python3", "-c",
-                "import manim, cairo; print('OK', manim.__version__)"
-            ),
+            command = listOf("/usr/bin/python3", "-c",
+                "import manim, cairo; print('OK', manim.__version__)")
         )
         return if (exitCode != 0 || !output.contains("OK")) {
-            InstallResult.Error("Manim verification failed:\n$output")
-        } else {
-            Log.i(TAG, "Verification passed: $output")
-            null
-        }
+            InstallResult.Error(
+                message = "Verification failed (exit $exitCode):\n$output",
+                diagnostics = diag,
+            )
+        } else null
     }
 
     private fun logRootfsDiagnostics() {
