@@ -14,179 +14,100 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install tools
-        run: |
-          sudo apt-get install -y patchelf zstd binutils
-          pip3 install requests
+        run: sudo apt-get install -y zstd binutils
 
       - name: Download Termux package index
         run: |
           wget -q \
             "https://packages.termux.dev/apt/termux-main/dists/stable/main/binary-aarch64/Packages.gz" \
             -O packages.gz
-          echo "Package index downloaded"
+          echo "Index downloaded"
 
-      - name: Extract proot binary
+      - name: Extract proot AND proot-loader from Termux package
         run: |
+          # Find and download proot package
           PROOT_PATH=$(zcat packages.gz | \
             awk '/^Package: proot$/{found=1} found && /^Filename:/{print $2; exit}')
-          echo "proot: $PROOT_PATH"
+          echo "proot package: $PROOT_PATH"
           wget -q "https://packages.termux.dev/apt/termux-main/${PROOT_PATH}" -O proot.deb
 
+          # Extract everything from the .deb
           mkdir proot_extract && cd proot_extract
           ar x ../proot.deb
-          if [ -f data.tar.xz ]; then tar xf data.tar.xz
-          elif [ -f data.tar.zst ]; then zstd -d data.tar.zst -o data.tar && tar xf data.tar
+          if [ -f data.tar.xz ]; then
+            tar xf data.tar.xz
+          elif [ -f data.tar.zst ]; then
+            zstd -d data.tar.zst -o data.tar && tar xf data.tar
           fi
-          cp $(find . -type f -name "proot" | head -1) ../proot-raw
+
+          echo "=== Contents of extracted package ==="
+          find . -type f | sort
+
+          # Extract proot main binary
+          PROOT_BIN=$(find . -type f -name "proot" ! -name "*loader*" | head -1)
+          echo "proot binary: $PROOT_BIN"
+          cp "$PROOT_BIN" ../proot-main
+
+          # Extract proot-loader (the critical missing piece)
+          # This is what proot needs pre-placed to avoid runtime chmod
+          LOADER_BIN=$(find . -type f -name "proot-loader" | grep -v "32" | head -1)
+          if [ -z "$LOADER_BIN" ]; then
+            LOADER_BIN=$(find . -type f | grep "loader" | grep -v "32" | head -1)
+          fi
+          echo "proot-loader binary: $LOADER_BIN"
+          cp "$LOADER_BIN" ../proot-loader
+
           cd ..
-          file proot-raw
+          file proot-main
+          file proot-loader
+          ls -lh proot-main proot-loader
 
-      - name: Discover ALL proot dependencies
+      - name: Download libtalloc and libandroid-shmem
         run: |
-          echo "=== All proot dependencies ==="
-          patchelf --print-needed proot-raw
+          for PKG in libtalloc libandroid-shmem; do
+            PKG_PATH=$(zcat packages.gz | \
+              awk -v p="$PKG" '/^Package: /{found=($2==p)} found && /^Filename:/{print $2; exit}')
+            echo "$PKG path: $PKG_PATH"
+            wget -q "https://packages.termux.dev/apt/termux-main/${PKG_PATH}" -O ${PKG}.deb
 
-          # Android system libs that are always present — skip these
-          SYSTEM_LIBS="libc.so libm.so libdl.so libz.so liblog.so \
-                       libpthread.so libresolv.so libutil.so \
-                       ld-linux-aarch64.so.1 ld-android.so"
-
-          # Get deps that are NOT system libs — these need to come from Termux
-          NEEDED_LIBS=$(patchelf --print-needed proot-raw)
-          echo "Raw deps: $NEEDED_LIBS"
-
-          TERMUX_DEPS=""
-          for lib in $NEEDED_LIBS; do
-            is_system=false
-            for syslib in $SYSTEM_LIBS; do
-              if [ "$lib" = "$syslib" ]; then
-                is_system=true
-                break
-              fi
-            done
-            if [ "$is_system" = "false" ]; then
-              TERMUX_DEPS="$TERMUX_DEPS $lib"
-              echo "  → Need from Termux: $lib"
-            else
-              echo "  → System lib (skip): $lib"
-            fi
-          done
-
-          echo "TERMUX_DEPS=$TERMUX_DEPS" >> $GITHUB_ENV
-
-      - name: Download all Termux dependencies
-        run: |
-          mkdir -p deps
-          mkdir -p android/app/src/main/jniLibs/arm64-v8a
-
-          for lib in $TERMUX_DEPS; do
-            echo "=== Processing: $lib ==="
-
-            # Find which Termux package provides this library
-            PKG_PATH=$(zcat packages.gz | python3 -c "
-          import sys, re
-
-          packages = sys.stdin.read().split('\n\n')
-          target = '$lib'
-
-          for pkg in packages:
-              lines = pkg.strip().split('\n')
-              pkg_data = {}
-              for line in lines:
-                  if ': ' in line:
-                      key, val = line.split(': ', 1)
-                      pkg_data[key.strip()] = val.strip()
-
-              # Check if this package provides our library
-              # Look in package name heuristically
-              pkg_name = pkg_data.get('Package', '')
-              filename = pkg_data.get('Filename', '')
-
-              # Match by stripping version suffix from lib name
-              # e.g. libtalloc.so.2 -> libtalloc
-              base = re.sub(r'\.so.*', '', target)  # libtalloc
-              if base in pkg_name and filename:
-                  print(filename)
-                  break
-          " 2>/dev/null)
-
-            if [ -z "$PKG_PATH" ]; then
-              echo "  WARNING: Could not find package for $lib, trying direct name match..."
-              # Fallback: strip version suffix and search
-              BASE=$(echo "$lib" | sed 's/\.so.*//')
-              PKG_PATH=$(zcat packages.gz | \
-                awk -v base="$BASE" '
-                  /^Package:/ { pkg=$2 }
-                  /^Filename:/ { 
-                    if (index(pkg, base) > 0) { print $2; exit }
-                  }')
-            fi
-
-            if [ -z "$PKG_PATH" ]; then
-              echo "  ERROR: Cannot find Termux package for $lib"
-              continue
-            fi
-
-            echo "  Package path: $PKG_PATH"
-            wget -q "https://packages.termux.dev/apt/termux-main/${PKG_PATH}" \
-              -O "deps/${lib}.deb"
-
-            # Extract the .so from the .deb
-            mkdir -p "deps/${lib}_extract"
-            cd "deps/${lib}_extract"
-            ar x ../${lib}.deb
+            mkdir ${PKG}_extract && cd ${PKG}_extract
+            ar x ../${PKG}.deb
             if [ -f data.tar.xz ]; then tar xf data.tar.xz
             elif [ -f data.tar.zst ]; then zstd -d data.tar.zst -o data.tar && tar xf data.tar
             fi
-
-            # Find the actual .so file
-            SO_FILE=$(find . -name "${lib}" -o -name "$(echo $lib | sed 's/\.so.*/\.so/')*" \
-                      2>/dev/null | grep "\.so" | head -1)
-
-            if [ -z "$SO_FILE" ]; then
-              # Try broader search
-              SO_FILE=$(find . -name "*.so*" -type f | head -1)
-            fi
-
-            echo "  Found: $SO_FILE"
-            cd ../..
-
-            if [ -n "$SO_FILE" ]; then
-              # Determine jniLibs name — must be lib*.so with no version suffix
-              JNILIB_NAME=$(echo "$lib" | sed 's/\.so\..*/\.so/')
-              echo "  jniLibs name: $JNILIB_NAME"
-
-              cp "deps/${lib}_extract/${SO_FILE}" \
-                 "android/app/src/main/jniLibs/arm64-v8a/${JNILIB_NAME}"
-
-              # If original had version suffix, patch proot to use new name
-              if [ "$lib" != "$JNILIB_NAME" ]; then
-                echo "  Patching proot: $lib -> $JNILIB_NAME"
-                patchelf --replace-needed "$lib" "$JNILIB_NAME" proot-raw
-              fi
-            else
-              echo "  ERROR: Could not extract $lib from package"
-            fi
+            find . -name "*.so*" -type f
+            SO=$(find . -name "*.so*" -type f | head -1)
+            echo "Found: $SO"
+            cp "$SO" ../${PKG}-raw.so
+            cd ..
           done
 
-          echo "=== All proot dependencies after patching ==="
-          patchelf --print-needed proot-raw
-
-      - name: Install patched proot to jniLibs
+      - name: Install all binaries to jniLibs
         run: |
-          cp proot-raw android/app/src/main/jniLibs/arm64-v8a/libproot.so
-          echo "=== Final jniLibs/arm64-v8a contents ==="
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+
+          # Main proot binary
+          cp proot-main android/app/src/main/jniLibs/arm64-v8a/libproot.so
+
+          # proot-loader — pre-placed so proot never needs to chmod at runtime
+          # Android extracts all lib*.so to nativeLibraryDir and marks them executable
+          cp proot-loader android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so
+
+          # Runtime dependencies
+          cp libtalloc-raw.so android/app/src/main/jniLibs/arm64-v8a/libtalloc.so
+          cp libandroid-shmem-raw.so android/app/src/main/jniLibs/arm64-v8a/libandroid-shmem.so
+
+          echo "=== Final jniLibs ==="
           ls -lh android/app/src/main/jniLibs/arm64-v8a/
           for f in android/app/src/main/jniLibs/arm64-v8a/*.so; do
-            echo "  $f: $(file $f | cut -d: -f2)"
-            patchelf --print-needed "$f" 2>/dev/null && echo "" || true
+            echo "$f: $(file $f | cut -d: -f2)"
           done
 
-      - name: Commit to repository
+      - name: Commit
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add android/app/src/main/jniLibs/arm64-v8a/
-          git diff --staged --quiet && echo "No changes to commit" || \
-            git commit -m "chore: update proot + all Termux deps, auto-patched for Android jniLibs"
+          git diff --staged --quiet && echo "No changes" || \
+            git commit -m "chore: add proot-loader — eliminates runtime chmod requirement"
           git push

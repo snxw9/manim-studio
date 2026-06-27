@@ -67,12 +67,13 @@ android/app/src/main/java/com/manimstudio/
 
 To execute Manim natively, Android requires full packages (Python, FFmpeg, LaTeX, dvisvgm, etc.). Since Android's standard Linux layer is locked, the project embeds a user-space container manager: **PRoot**.
 
-- **Libraries**: Native shared libraries (`libproot.so`, `libandroid-shmem.so`, `libtalloc.so`) are distributed under `src/main/jniLibs/arm64-v8a/` and extracted on app installation.
+- **Libraries**: Native shared libraries (`libproot.so`, `libproot-loader.so`, `libandroid-shmem.so`, `libtalloc.so`) are distributed under `src/main/jniLibs/arm64-v8a/` and extracted on app installation. Pre-placing the loader as a system-extracted shared library (`libproot-loader.so`) completely eliminates the runtime `chmod` / extraction requirement that triggers security issues on Android.
 - **Directory Paths**:
   - `rootfs/`: Mounted guest OS filesystem root (`/`).
   - `home/manim/`: Guest user directory (`/home/manim`), housing Python workspace script outputs.
   - `renders/`: Host folder bound to `/renders` inside the guest to copy final MP4 structures.
-  - `proot_tmp/`: Environment `/tmp` directory.
+  - `proot_tmp`: Environment `/tmp` directory for PRoot's internal lock files, located at `/data/local/tmp/${context.packageName}`.
+
 
 > [!IMPORTANT]
 > **Realpath Path Mismatch**: PRoot's internal `realpath()` resolves `/data/user/0/` to `/data/data/`. Any mismatch in directory paths causes all temporary file/folder operations inside guest scripts to fail with `ENOENT`. To avoid this, the project hardcodes the base directory in `ProotEngine.kt` to `/data/data/${context.packageName}` instead of using `context.filesDir` (which resolves to `/data/user/0/...` on Android).

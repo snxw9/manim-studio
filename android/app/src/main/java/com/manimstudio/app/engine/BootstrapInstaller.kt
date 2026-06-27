@@ -371,6 +371,12 @@ class BootstrapInstaller(
         }
 
         sb.appendLine("")
+        sb.appendLine("=== PROOT LOADER ===")
+        sb.appendLine("path: ${engine.prootLoader.absolutePath}")
+        sb.appendLine("exists: ${engine.prootLoader.exists()}")
+        sb.appendLine("canExecute: ${engine.prootLoader.canExecute()}")
+
+        sb.appendLine("")
         sb.appendLine("=== NATIVE LIBS DIR ===")
         sb.appendLine("path: $nativeDir")
         val nativeDirFile = File(nativeDir)
