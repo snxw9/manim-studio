@@ -67,7 +67,7 @@ android/app/src/main/java/com/manimstudio/
 
 To execute Manim natively, Android requires full packages (Python, FFmpeg, LaTeX, dvisvgm, etc.). Since Android's standard Linux layer is locked, the project embeds a user-space container manager: **PRoot**.
 
-- **Libraries**: Native shared libraries (`libproot.so`, `libproot-loader.so`, `libandroid-shmem.so`, `libtalloc.so`) are distributed under `src/main/jniLibs/arm64-v8a/` and extracted on app installation. Pre-placing the loader as a system-extracted shared library (`libproot-loader.so`) completely eliminates the runtime `chmod` / extraction requirement that triggers security issues on Android.
+- **Libraries**: Native shared libraries (`libproot.so`, `libproot-loader.so`, `libandroid-shmem.so`, `libtalloc.so`) are distributed under `src/main/jniLibs/arm64-v8a/` and extracted on app installation. Pre-placing the loader as a system-extracted shared library (`libproot-loader.so`) completely eliminates the runtime `chmod` / extraction requirement that triggers security issues on Android. *Note: `libtalloc.so` is patched via `patchelf` at build-time to match Android's flat JNI library naming constraint, which does not allow version suffixes like `.so.2`.*
 - **Directory Paths**:
   - `rootfs/`: Mounted guest OS filesystem root (`/`).
   - `home/manim/`: Guest user directory (`/home/manim`), housing Python workspace script outputs.
