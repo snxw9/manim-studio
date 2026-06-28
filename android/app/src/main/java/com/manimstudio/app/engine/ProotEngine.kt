@@ -16,8 +16,8 @@ class ProotEngine(val context: Context) {
     private val tmpDir = File("$base/files/tmp")
 
     val pythonBin = File(rootfsDir, "usr/bin/python3")
-    val ffmpegBin = File(rootfsDir, "usr/bin/ffmpeg")
-    val latexBin  = File(rootfsDir, "usr/bin/latex")
+    val ffmpegBin = File(rootfsDir, "usr/local/bin/ffmpeg")
+    val latexBin  = File(rootfsDir, "opt/TinyTeX/bin/aarch64-linux/latex")
 
     val prootBin    = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
     // Pre-placed loader — proot uses this instead of extracting to tmp dir
@@ -36,7 +36,7 @@ class ProotEngine(val context: Context) {
         "--kill-on-exit",
         "--link2symlink",
         "-0",
-        "--kernel-release=5.4.0-faked",
+        "--kernel-release=4.9.0-faked",
         "-r", rootfsDir.absolutePath,
         "-b", "/dev",
         "-b", "/dev/urandom:/dev/random",
@@ -51,19 +51,22 @@ class ProotEngine(val context: Context) {
     fun buildEnvironment(
         extra: Map<String, String> = emptyMap(),
     ): Map<String, String> = mapOf(
-        "HOME"            to "/home/manim",
-        "PATH"            to "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        "TERM"            to "xterm-256color",
-        "LANG"            to "C.UTF-8",
-        "LC_ALL"          to "C.UTF-8",
-        "TMPDIR"          to "/tmp",
-        "DEBIAN_FRONTEND" to "noninteractive",
-        // Tell proot where the pre-placed loader is.
-        // proot uses this directly — never needs to extract or chmod anything.
-        "PROOT_LOADER"    to prootLoader.absolutePath,
-        // Still needed for proot's own dynamic linker to find libtalloc.so
-        "LD_LIBRARY_PATH" to context.applicationInfo.nativeLibraryDir,
-        "PROOT_NO_SECCOMP" to "1",
+        "HOME"                    to "/home/manim",
+        "PATH"                    to "/opt/TinyTeX/bin/aarch64-linux:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "TERM"                    to "xterm-256color",
+        "LANG"                    to "C.UTF-8",
+        "LC_ALL"                  to "C.UTF-8",
+        "TMPDIR"                  to "/tmp",
+        "DEBIAN_FRONTEND"         to "noninteractive",
+        "PROOT_LOADER"            to prootLoader.absolutePath,
+        "LD_LIBRARY_PATH"         to context.applicationInfo.nativeLibraryDir,
+        "PROOT_NO_SECCOMP"        to "1",
+        // Prevent Python from writing .pyc files — reduces filesystem syscalls
+        "PYTHONDONTWRITEBYTECODE" to "1",
+        // Disable user site packages — simplifies import path resolution
+        "PYTHONNOUSERSITE"        to "1",
+        // Disable hash randomization — removes a getrandom() syscall on startup
+        "PYTHONHASHSEED"          to "0",
     ) + extra
 
     suspend fun exec(

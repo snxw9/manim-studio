@@ -309,10 +309,9 @@ class BootstrapInstaller(
 
             val essential = mapOf(
                 "python3" to "usr/bin/python3",
-                "pip3"    to "usr/bin/pip3",
-                "ffmpeg"  to "usr/bin/ffmpeg",
-                "latex"   to "usr/bin/latex",
-                "dvisvgm" to "usr/bin/dvisvgm",
+                "ffmpeg"  to "usr/local/bin/ffmpeg",
+                "latex"   to "opt/TinyTeX/bin/aarch64-linux/latex",
+                "dvisvgm" to "opt/TinyTeX/bin/aarch64-linux/dvisvgm",
             )
 
             val missing = essential.filterValues { rel ->
@@ -446,16 +445,37 @@ class BootstrapInstaller(
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private suspend fun verify(): InstallResult? {
         val diag = collectDiagnostics()
-        val (exitCode, output) = engine.exec(
-            command = listOf("/usr/bin/python3", "-c",
-                "import manim, cairo; print('OK', manim.__version__)")
+
+        // Step 1: bash sanity check
+        val (bashExit, bashOut) = engine.exec(
+            listOf("/bin/bash", "-c", "echo 'bash OK'")
         )
-        return if (exitCode != 0 || !output.contains("OK")) {
-            InstallResult.Error(
-                message = "Verification failed (exit $exitCode):\n$output",
-                diagnostics = diag,
-            )
-        } else null
+        if (bashExit != 0) return InstallResult.Error(
+            "Bash failed:\n$bashOut", diagnostics = diag)
+
+        // Step 2: python version only
+        val (pyExit, pyOut) = engine.exec(
+            listOf("/usr/bin/python3.11", "-c", "import sys; print('python OK', sys.version[:6])")
+        )
+        if (pyExit != 0) return InstallResult.Error(
+            "Python failed:\n$pyOut", diagnostics = diag)
+
+        // Step 3: cairo only
+        val (cairoExit, cairoOut) = engine.exec(
+            listOf("/usr/bin/python3.11", "-c", "import cairo; print('cairo OK')")
+        )
+        if (cairoExit != 0) return InstallResult.Error(
+            "Cairo import failed:\n$cairoOut", diagnostics = diag)
+
+        // Step 4: full manim
+        val (manimExit, manimOut) = engine.exec(
+            listOf("/usr/bin/python3.11", "-c",
+                "import manim; print('manim OK', manim.__version__)")
+        )
+        if (manimExit != 0 || !manimOut.contains("OK")) return InstallResult.Error(
+            "Manim import failed:\n$manimOut", diagnostics = diag)
+
+        return null
     }
 
     private fun logRootfsDiagnostics() {
